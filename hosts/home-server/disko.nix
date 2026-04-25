@@ -175,7 +175,10 @@
             vdev = [
               {
                 mode = "mirror";
-                members = [ "hdd1" "hdd2" ];
+                members = [
+                  "hdd1"
+                  "hdd2"
+                ];
               }
             ];
             cache = [ "/dev/disk/by-partlabel/disk-ssd-l2arc" ];

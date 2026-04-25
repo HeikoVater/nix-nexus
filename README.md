@@ -1,146 +1,66 @@
 # nix-nexus
 
-Declarative NixOS configuration for a home server running smart home
-automation and media services. The entire system is defined as a single Nix
-flake with impermanent root (tmpfs) and two-tier ZFS storage. Deploys
-automatically from GitHub.
-
-## Hardware
-
-| Component | Model |
-|-----------|-------|
-| CPU | AMD Ryzen 5 7600 (Zen 4, 6-core) |
-| RAM | 48 GB DDR5-5600 (2x 24 GB Crucial Pro) |
-| Motherboard | ASRock B650M Pro RS (AM5) |
-| Boot / Hot Storage | WD_BLACK SN7100 1 TB NVMe |
-| Bulk Storage | 2x Seagate IronWolf 12 TB (7200 RPM) |
-| Case | Fractal Design Define R5 |
-| PSU | be quiet! Pure Power 13 M 550W 80+ Gold |
-
-## Storage Architecture
-
-```
-           ┌─────────── RAM (48 GB) ───────────┐
-           │                                    │
-           │  / (tmpfs, 4 GB)  ← wiped on boot │
-           │  ZFS ARC (16 GB cap)               │
-           │  zram swap (~8 GB compressed)      │
-           └────────────────────────────────────┘
-
-  NVMe SSD (1 TB)
-  ┌──────┬──────┬─────────┬────────────────────┐
-  │ ESP  │ Swap │ L2ARC   │ rpool              │
-  │ 1 GB │ 8 GB │ 150 GB  │ ~841 GB            │
-  └──────┴──────┴────┬────┴────────────────────┘
-                     │ cache
-  HDD 1 (12 TB)  ┌──▼──┐  HDD 2 (12 TB)
-  ┌───────────────┤tank ├───────────────┐
-  │               │mirror│              │
-  └───────────────┴─────┴───────────────┘
-
-  rpool/nix       → /nix              (Nix store)
-  rpool/persist   → /persist          (all persistent state)
-  rpool/postgres  → /var/lib/postgresql
-
-  tank/safe       → /tank/safe        (photos, documents)
-  tank/data       → /tank/data        (Syncthing, Samba)
-  tank/media      → /tank/media       (Jellyfin video)
-  tank/backups    → /tank/backups     (BorgBackup repo)
-```
-
-Root (`/`) is tmpfs and wiped every reboot. Only paths declared in
-`modules/nixos/impermanence.nix` survive, bind-mounted from `/persist`.
-
-## Services
-
-```
-                  ┌──────────────────────────────┐
-                  │     Caddy (ports 80/443)      │
-                  │  hass.<domain> → localhost:8123│
-                  │  z2m.<domain>  → localhost:8080│
-                  └──────┬───────────────┬────────┘
-                         │               │
-              ┌──────────▼───┐   ┌───────▼──────────┐
-              │Home Assistant│   │   Zigbee2MQTT     │
-              │  (port 8123) │   │   (port 8080)     │
-              └──────┬───────┘   │  serial: /dev/zigbee
-                     │           └───────┬──────────┘
-                     │  ┌────────────┐   │
-                     └─►│ Mosquitto  │◄──┘
-                        │(port 1883) │
-                        └────────────┘
-
-  ┌──────────────────┐   ┌───────────────────────┐
-  │ BorgBackup (3 AM)│   │ Auto-Upgrade (4 AM)   │
-  │ → /tank/backups  │   │ ← github:heikov/      │
-  │                  │   │   home-server          │
-  └──────────────────┘   └───────────────────────┘
-```
-
-| Service | Description |
-|---------|-------------|
-| **Caddy** | Reverse proxy with self-signed TLS and subdomain routing |
-| **Home Assistant** | Smart home automation platform |
-| **Zigbee2MQTT** | Bridges Zigbee devices to MQTT for Home Assistant discovery |
-| **Mosquitto** | MQTT broker for inter-service messaging (localhost only) |
-| **BorgBackup** | Daily encrypted backups of service state to the tank pool |
-| **Auto-Upgrade** | Pulls the latest flake from GitHub and rebuilds daily |
+Declarative multi-host NixOS configuration for home servers. The entire system
+-- services, networking, users, secrets, disk layout -- is defined as a Nix
+flake with impermanent root (tmpfs) and ZFS storage. Changes go through PRs
+with CI validation, and servers auto-deploy from `main`.
 
 ## Repository Structure
 
 ```
 .
-├── flake.nix                        # Flake entry point
+├── flake.nix                           # Flake entry point, all inputs and host definitions
+├── .envrc                              # Direnv -- activates devShell, installs pre-commit hooks
+├── .github/workflows/ci.yml           # CI -- runs on every PR to main
 ├── hosts/
-│   └── home-server/
-│       ├── default.nix              # Host config, service toggles, networking
-│       ├── hardware-configuration.nix  # Boot, kernel, ZFS, tmpfs root, zram
-│       └── disko.nix                # Declarative disk layout (partitions, pools)
-├── modules/
-│   ├── nixos/                       # System-level service modules
-│   │   ├── impermanence.nix         # Persistent state declarations
-│   │   ├── secrets.nix
-│   │   ├── caddy.nix
-│   │   ├── home-assistant.nix
-│   │   ├── mosquitto.nix
-│   │   ├── zigbee2mqtt.nix
-│   │   ├── backups.nix
-│   │   ├── auto-upgrade.nix
-│   │   └── nh.nix
-│   └── home-manager/                # User environment modules
-│       ├── nvf.nix
-│       ├── opencode.nix
-│       ├── tmux.nix
-│       └── zsh.nix
+│   ├── home-server/                    # Per-host configuration
+│   │   ├── default.nix                 # Service toggles, networking, users
+│   │   ├── hardware-configuration.nix  # Boot, kernel, storage
+│   │   └── disko.nix                   # Declarative disk layout
+│   └── example/                        # Example host template
 ├── home/
-│   └── heikov/
-│       └── default.nix              # Home Manager config for the heikov user
+│   ├── heikov/                         # Per-user Home Manager config
+│   │   └── default.nix                 # Module toggles, git, locale, packages
+│   └── example/                        # Example user template
+├── modules/
+│   ├── nixos/                          # System service modules (one per service)
+│   │   ├── impermanence.nix            # Persistent state declarations
+│   │   ├── secrets.nix                 # sops-nix secret declarations
+│   │   ├── caddy.nix                   # Reverse proxy
+│   │   ├── home-assistant.nix          # Smart home automation
+│   │   ├── mosquitto.nix               # MQTT broker
+│   │   ├── zigbee2mqtt.nix             # Zigbee bridge
+│   │   ├── backups.nix                 # BorgBackup
+│   │   ├── auto-upgrade.nix            # Daily flake rebuild from GitHub
+│   │   ├── nh.nix                      # Nix helper / garbage collection
+│   │   └── example.nix                 # Example module template
+│   └── home-manager/                   # User environment modules
+│       ├── cli/                        # CLI tools (zsh, tmux, starship, etc.)
+│       └── tui/                        # TUI tools (nvf, opencode, yazi, etc.)
 └── secrets/
-    └── hosts/
-        └── home-server.yaml         # Encrypted secrets (sops + age)
+    ├── hosts/<hostname>.yaml           # Encrypted host secrets (sops + age)
+    ├── users/<username>.yaml           # Encrypted user secrets (sops-menu)
+    └── */example.yaml                  # Unencrypted reference files
 ```
 
-## Deployment
+## Getting Started
 
-Build and apply the configuration locally:
+### Prerequisites
+
+- [Nix](https://nixos.org/download/) with flakes enabled
+- [direnv](https://direnv.net/) (recommended)
+
+### Setup
 
 ```sh
-nixos-rebuild switch --flake .#home-server
+git clone <repo-url>
+cd nix-nexus
+direnv allow    # installs pre-commit hooks via devShell
 ```
 
-Or build without switching to verify it evaluates cleanly:
+### Configuration
 
-```sh
-nixos-rebuild build --flake .#home-server
-```
-
-When `homelab.auto-upgrade.enable` is `true`, the server pulls the latest flake
-from GitHub at 04:00 daily and rebuilds itself. Reboots (for kernel updates) are
-permitted within a 03:00-05:00 maintenance window.
-
-## Configuration
-
-All services are toggled in `hosts/home-server/default.nix`:
+System services are toggled per-host in `hosts/<hostname>/default.nix`:
 
 ```nix
 homelab = {
@@ -150,39 +70,98 @@ homelab = {
   zigbee2mqtt.enable = true;
   backups.enable = true;
   auto-upgrade.enable = true;
-  nh.enable = true;
 };
 ```
 
-Setting any toggle to `false` cleanly disables the service and adjusts
-dependents automatically (firewall rules, backup paths, Caddy routes,
-persisted state, secrets).
-
-User-level tools are toggled in `home/heikov/default.nix`:
+User-level tools are toggled per-user in `home/<username>/default.nix`:
 
 ```nix
 user = {
-  nvf.enable = true;
-  zsh.enable = true;
-  tmux.enable = true;
-  opencode.enable = true;
+  cli = {
+    packages.enable = true;
+    zsh.enable = true;
+    tmux.enable = true;
+    starship.enable = true;
+    # ...
+  };
+  tui = {
+    nvf.enable = true;
+    opencode.enable = true;
+    yazi.enable = true;
+    # ...
+  };
 };
+```
+
+Setting any toggle to `false` cleanly disables it and adjusts dependents
+automatically (firewall rules, backup paths, Caddy routes, persisted state,
+secrets).
+
+## Validation & CI
+
+### Pre-commit hooks
+
+Installed automatically via `direnv allow` (or `nix develop`). Runs on every
+commit:
+- **nixfmt-rfc-style** -- formats staged `.nix` files
+- **check-merge-conflicts** -- catches leftover conflict markers
+- **detect-private-key** -- prevents committing private keys
+
+### CI (GitHub Actions)
+
+Every PR to `main` runs:
+1. `nix fmt -- --check` -- formatting gate
+2. `nix flake check` -- schema validation
+3. `nix eval` for **every** host -- deep evaluation
+
+Adding a new host to `flake.nix` automatically includes it in CI.
+
+### Local validation
+
+```sh
+nix fmt                                  # format all Nix files
+nix flake check                          # validate flake schema
+nix eval .#nixosConfigurations.<host>.config.system.build.toplevel --apply 'x: "ok"'  # deep eval
+nixos-rebuild build --flake .#<host>     # full build without switching
+```
+
+## Deployment
+
+After a PR is merged to `main`, each server's auto-upgrade timer picks up
+changes (typically at 04:00). For immediate deployment:
+
+```sh
+ssh <host>
+nixos-rebuild switch --flake github:<org>/<repo>
 ```
 
 ## Secrets Management
 
 Secrets are encrypted at rest with [sops-nix](https://github.com/Mic92/sops-nix)
-using age keys. They are decrypted to `/run/secrets/<name>` at activation time.
-
-Edit secrets:
+using age keys, decrypted to `/run/secrets/<name>` at activation time.
 
 ```sh
-sops secrets/hosts/home-server.yaml
+sops secrets/hosts/<hostname>.yaml       # edit host secrets
+sops secrets/users/<username>.yaml       # edit user secrets (sops-menu)
 ```
 
-The age key must be present on the server at `/var/lib/sops-nix/key.txt` before
-the first deploy. This path is persisted via impermanence so it survives
-reboots. See `.sops.yaml` for the encryption key configuration.
+The age key must be present on the server at `/var/lib/sops-nix/key.txt`
+before the first deploy. This path is persisted via impermanence. See
+`.sops.yaml` for encryption key configuration and `secrets/*/example.yaml`
+for file format reference.
+
+## Adding Hosts, Users, and Modules
+
+See [AGENTS.md](AGENTS.md) for detailed instructions on:
+- Adding a new host
+- Adding a new user
+- Adding NixOS service modules
+- Adding Home Manager modules (CLI/TUI)
+- Adding secrets
+
+Example templates are provided in `hosts/example/`, `home/example/`,
+`modules/nixos/example.nix`, `modules/home-manager/cli/example.nix`,
+`modules/home-manager/tui/example.nix`, and `secrets/*/example.yaml`.
 
 ## License
 

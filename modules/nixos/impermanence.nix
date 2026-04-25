@@ -21,21 +21,20 @@ in
     hideMounts = true;
 
     # ─── System State ───────────────────────────────────────────
-    directories =
-      [
-        "/var/log" # systemd journal and service logs
-        "/var/lib/nixos" # NixOS state (uid/gid map, etc.)
-        "/var/lib/systemd/coredump" # crash dumps for debugging
-        "/var/lib/systemd/timers" # persistent timer state (backup/upgrade schedules)
-        "/var/lib/sops-nix" # age decryption key — CRITICAL for secrets
-        "/etc/zfs" # ZFS cache files (avoids "device busy" on atomic updates)
-      ]
-      # ─── Service State (conditional) ──────────────────────────
-      # Only persist directories for services that are enabled.
-      ++ (lib.optional ha.enable "/var/lib/hass")
-      ++ (lib.optional z2m.enable "/var/lib/zigbee2mqtt")
-      ++ (lib.optional mqtt.enable "/var/lib/mosquitto")
-      ++ (lib.optional cc.enable "/etc/coolercontrol");
+    directories = [
+      "/var/log" # systemd journal and service logs
+      "/var/lib/nixos" # NixOS state (uid/gid map, etc.)
+      "/var/lib/systemd/coredump" # crash dumps for debugging
+      "/var/lib/systemd/timers" # persistent timer state (backup/upgrade schedules)
+      "/var/lib/sops-nix" # age decryption key — CRITICAL for secrets
+      "/etc/zfs" # ZFS cache files (avoids "device busy" on atomic updates)
+    ]
+    # ─── Service State (conditional) ──────────────────────────
+    # Only persist directories for services that are enabled.
+    ++ (lib.optional ha.enable "/var/lib/hass")
+    ++ (lib.optional z2m.enable "/var/lib/zigbee2mqtt")
+    ++ (lib.optional mqtt.enable "/var/lib/mosquitto")
+    ++ (lib.optional cc.enable "/etc/coolercontrol");
 
     # ─── System Files ───────────────────────────────────────────
     files = [
@@ -47,7 +46,10 @@ in
     # users can be added here as the server grows.
     users.heikov = {
       directories = [
-        { directory = ".ssh"; mode = "0700"; }
+        {
+          directory = ".ssh";
+          mode = "0700";
+        }
       ];
     };
   };

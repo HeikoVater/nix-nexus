@@ -45,8 +45,7 @@ in
 
     services.borgbackup.jobs.home-server = {
       paths =
-        (lib.optional ha.enable "/var/lib/hass")
-        ++ (lib.optional z2m.enable "/var/lib/zigbee2mqtt");
+        (lib.optional ha.enable "/var/lib/hass") ++ (lib.optional z2m.enable "/var/lib/zigbee2mqtt");
 
       repo = cfg.repo;
       doInit = true;

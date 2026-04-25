@@ -1,0 +1,32 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: DeterminateSystems/nix-installer-action@main
+
+      - uses: DeterminateSystems/magic-nix-cache-action@main
+
+      # Verify all Nix files are formatted
+      - name: Check formatting
+        run: nix fmt -- --check
+
+      # Validate flake schema and output types
+      - name: Flake check
+        run: nix flake check
+
+      # Deep evaluation of every host — catches option mismatches,
+      # missing modules, and broken references
+      - name: Evaluate all NixOS configurations
+        run: |
+          for host in $(nix eval .#nixosConfigurations --apply 'x: builtins.concatStringsSep " " (builtins.attrNames x)' --raw); do
+            echo "Evaluating $host..."
+            nix eval ".#nixosConfigurations.$host.config.system.build.toplevel" --apply 'x: "ok"'
+          done

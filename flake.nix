@@ -26,6 +26,11 @@
       url = "github:notashelf/nvf";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+
+    git-hooks = {
+      url = "github:cachix/git-hooks.nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   outputs =
@@ -38,6 +43,7 @@
       disko,
       impermanence,
       nvf,
+      git-hooks,
       ...
     }:
     let
@@ -51,10 +57,18 @@
     {
       formatter.${system} = pkgs.nixfmt-tree;
 
-      checks.${system}.formatting = pkgs.runCommand "nixfmt-check" { } ''
-        ${pkgs.nixfmt-tree}/bin/nixfmt --check ${self}
-        touch $out
-      '';
+      checks.${system}.pre-commit-check = git-hooks.lib.${system}.run {
+        src = self;
+        hooks = {
+          nixfmt-rfc-style.enable = true;
+          check-merge-conflicts.enable = true;
+          detect-private-key.enable = true;
+        };
+      };
+
+      devShells.${system}.default = pkgs.mkShell {
+        inherit (self.checks.${system}.pre-commit-check) shellHook;
+      };
 
       nixosConfigurations.home-server = nixpkgs.lib.nixosSystem {
         inherit system;
