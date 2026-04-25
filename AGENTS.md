@@ -61,6 +61,7 @@ modules/nixos/            System service modules (one file per service).
   backups.nix             BorgBackup.
   auto-upgrade.nix        Daily flake rebuild from GitHub.
   nh.nix                  Nix helper / garbage collection.
+  coolercontrol.nix       Fan management (CoolerControl).
   example.nix             Example NixOS module for reference.
 
 modules/home-manager/     User environment modules.

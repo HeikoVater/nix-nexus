@@ -33,6 +33,7 @@ with CI validation, and servers auto-deploy from `main`.
 │   │   ├── backups.nix                 # BorgBackup
 │   │   ├── auto-upgrade.nix            # Daily flake rebuild from GitHub
 │   │   ├── nh.nix                      # Nix helper / garbage collection
+│   │   ├── coolercontrol.nix           # Fan management
 │   │   └── example.nix                 # Example module template
 │   └── home-manager/                   # User environment modules
 │       ├── cli/                        # CLI tools (zsh, tmux, starship, etc.)

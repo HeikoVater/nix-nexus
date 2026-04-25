@@ -83,8 +83,11 @@
     };
   };
 
+  programs.zsh.enable = true;
+
   users.users.heikov = {
     isNormalUser = true;
+    shell = pkgs.zsh;
     extraGroups = [ "wheel" ];
     hashedPasswordFile = config.sops.secrets.heikov_password_hash.path;
     openssh.authorizedKeys.keys = [
@@ -103,7 +106,37 @@
     allowedTCPPorts = [ 22 ];
   };
 
+  # ─── Persistence ───────────────────────────────────────────────
+  # Persist heikov's .ssh dir (impermanence tracks it within home).
+  # The full home directory is bind-mounted below.
+  environment.persistence."/persist".users.heikov = {
+    directories = [
+      {
+        directory = ".ssh";
+        mode = "0700";
+      }
+    ];
+  };
+
+  # Bind-mount the entire home from /persist so shell history,
+  # config files, and working data survive reboots.
+  fileSystems."/home/heikov" = {
+    device = "/persist/home/heikov";
+    fsType = "none";
+    options = [ "bind" ];
+    depends = [ "/persist" ];
+    neededForBoot = true;
+  };
+
+  # ─── Secrets ───────────────────────────────────────────────────
+  sops.defaultSopsFile = ../../secrets/hosts/home-server.yaml;
+
+  sops.secrets.heikov_password_hash = {
+    neededForUsers = true;
+  };
+
   # ─── Common Tools ──────────────────────────────────────────────
+  environment.systemPackages = [ pkgs.kitty.terminfo ];
   programs.git.enable = true;
 
   # ─── Nix Settings ──────────────────────────────────────────────

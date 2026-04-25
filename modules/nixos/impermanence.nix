@@ -2,8 +2,11 @@
 #  Impermanence — Persistent State on Ephemeral Root
 # ═══════════════════════════════════════════════════════════════════
 #  Root (/) is tmpfs and wiped every reboot. This module declares
-#  which system state, service data, and user files survive reboots
-#  by bind-mounting them from /persist (rpool/persist on the SSD).
+#  which system state and service data survive reboots by
+#  bind-mounting from /persist (rpool/persist on the SSD).
+#
+#  Per-user home directories and user-specific persistence are
+#  declared in each host's default.nix, not here.
 #
 #  Adding a new service? If it stores state under /var/lib/<name>,
 #  add it to the conditional directories block below.
@@ -40,18 +43,6 @@ in
     files = [
       "/etc/machine-id" # stable machine identity for systemd/journal
     ];
-
-    # ─── User State ─────────────────────────────────────────────
-    # Persist the heikov user's entire home directory. Individual
-    # users can be added here as the server grows.
-    users.heikov = {
-      directories = [
-        {
-          directory = ".ssh";
-          mode = "0700";
-        }
-      ];
-    };
   };
 
   # ─── SSH Host Keys ──────────────────────────────────────────
@@ -70,16 +61,4 @@ in
     }
   ];
 
-  # ─── Persist /home/heikov ───────────────────────────────────
-  # Mount the home directory from persist so the heikov user's
-  # shell history, config files, and working data survive reboots.
-  # This is a plain bind mount rather than impermanence per-file
-  # tracking — the entire home is persistent.
-  fileSystems."/home/heikov" = {
-    device = "/persist/home/heikov";
-    fsType = "none";
-    options = [ "bind" ];
-    depends = [ "/persist" ];
-    neededForBoot = true;
-  };
 }

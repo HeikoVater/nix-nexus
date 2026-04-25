@@ -30,6 +30,13 @@ in
         df = "duf";
         du = "dust";
 
+        tl = "tmux ls";
+        ta = "tmux attach -t";
+        ts = "tmux new-session -s";
+        td = "tmux detach";
+        tks = "tmux kill-session -t";
+        tkall = "tmux kill-server";
+
         nr = "nh os switch";
         nu = "nh os switch --update";
         nt = "nh os test --impure";

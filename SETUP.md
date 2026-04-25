@@ -1,7 +1,11 @@
-# Home Server Setup Guide
+# Setup Guide
 
-Step-by-step installation from a graphical NixOS live USB. Everything
-happens on the server itself -- no separate workstation needed.
+Step-by-step installation of a new host from a graphical NixOS live USB.
+Everything happens on the server itself -- no separate workstation needed for
+the initial install. Changes are then pushed as a PR from your workstation.
+
+This guide uses `home-server` and `heikov` as concrete examples throughout.
+Replace them with your actual hostname and username where indicated.
 
 ## What You Need
 
@@ -12,34 +16,24 @@ Two USB drives plugged into the server:
 
 2. **Data USB** -- containing:
    - A clone of this repository
-   - The `heikov` SSH private key (`id_ed25519`)
-   - The home-server age key (`key.txt`) and its public key
+   - The `heikov` SSH private key (`id_ed25519`) -- needed for sops decryption
+   - The host's age key (`key.txt`) and its public key
 
-**Hardware assembled and connected:**
-- ASRock B650M Pro RS motherboard with AMD Ryzen 5 7600
-- 48 GB DDR5 RAM
-- WD_BLACK SN7100 1 TB NVMe in the M.2 slot
-- 2x Seagate IronWolf 12 TB HDDs via SATA
-- Sonoff Zigbee 3.0 Plus USB stick
-- Ethernet cable to Fritz!Box (internet required)
+**Internet required** (Ethernet cable connected to your router).
 
 ---
 
 ## Step 1: Boot and Open a Terminal
 
-Boot from the installer USB (enter BIOS with DEL key, set USB as first
-boot device). Once the graphical desktop loads, open a terminal
-(search "Terminal" in the activities menu).
+Boot from the installer USB (enter BIOS, set USB as first boot device). Once
+the graphical desktop loads, open a terminal.
 
-Verify internet:
+Verify internet connectivity:
 ```sh
 ping -c 3 1.1.1.1
 ```
 
-If there is no connectivity, check that the Ethernet cable is plugged in
-and use the desktop's network settings to configure it.
-
-Enable flakes for the session:
+Enable flakes for the live session:
 ```sh
 export NIX_CONFIG="experimental-features = nix-command flakes"
 ```
@@ -48,15 +42,14 @@ export NIX_CONFIG="experimental-features = nix-command flakes"
 
 ## Step 2: Locate the Data USB
 
-The graphical desktop auto-mounts USB drives under `/run/media/nixos/`.
-Find your data USB:
+The graphical desktop auto-mounts USB drives under `/run/media/nixos/`. Find
+your data USB:
 
 ```sh
 ls /run/media/nixos/
 ```
 
-Set a variable for convenience (replace `<label>` with the actual
-directory name shown above):
+Set a variable for convenience (replace `<label>` with the actual name shown):
 
 ```sh
 USB=/run/media/nixos/<label>
@@ -77,7 +70,7 @@ USB=/tmp/usb
 
 ```sh
 cp -r $USB/nix-nexus /tmp/nix-nexus
-cp $USB/key.txt /tmp/server-age-key.txt
+cp $USB/key.txt /tmp/host-age-key.txt
 mkdir -p ~/.ssh
 cp $USB/id_ed25519 ~/.ssh/id_ed25519
 chmod 600 ~/.ssh/id_ed25519
@@ -105,7 +98,7 @@ Stay in this shell for all remaining steps.
 ls -l /dev/disk/by-id/ | grep -v part
 ```
 
-Note down three IDs (the base names, not the `-partN` suffixed ones):
+Note the base IDs (without the `-partN` suffix) for each disk:
 
 | Disk | Looks like |
 |---|---|
@@ -129,7 +122,7 @@ Replace the three placeholders with the disk IDs from step 5:
 | `PLACEHOLDER_HDD1` | First HDD disk ID |
 | `PLACEHOLDER_HDD2` | Second HDD disk ID |
 
-Save and exit (:wq).
+Save and exit (`:wq`).
 
 ---
 
@@ -139,9 +132,9 @@ Save and exit (:wq).
 mkpasswd -m sha-512
 ```
 
-Enter your desired password for the `heikov` user when prompted. Copy
-the output hash (starts with `$6$...`). This password is used for
-console login and persists across reboots via sops.
+Enter the desired password for the `heikov` user when prompted. Copy the
+output hash (starts with `$6$...`). This is used for console login and
+persists across reboots via sops.
 
 ---
 
@@ -151,27 +144,22 @@ console login and persists across reboots via sops.
 sops /tmp/nix-nexus/secrets/hosts/home-server.yaml
 ```
 
-This decrypts and opens the secrets file. sops uses the SSH key at
-`~/.ssh/id_ed25519` directly -- no conversion needed.
+sops decrypts using `~/.ssh/id_ed25519` directly -- no key conversion needed.
 
-Add the user password:
+Set the user password and verify all service secrets have real values:
 
 ```yaml
 heikov_password_hash: "$6$rounds=..."
+mqtt_password_homeassistant: "..."
+mqtt_password_zigbee2mqtt: "..."
+borg_passphrase: "..."
 ```
 
-Also verify these existing secrets contain real values (not
-placeholders):
-
-- `mqtt_password_homeassistant`
-- `mqtt_password_zigbee2mqtt`
-- `borg_passphrase`
-
-Save and exit. sops re-encrypts the file automatically.
+Save and exit. sops re-encrypts automatically.
 
 ---
 
-## Step 9: Generate the Flake Lock File
+## Step 9: Lock the Flake
 
 ```sh
 cd /tmp/nix-nexus
@@ -180,20 +168,18 @@ nix flake lock
 git add flake.lock
 ```
 
-`git add` is required because nix flakes ignore untracked files in git
-repos. `nix flake lock` pins all input versions (downloads from the
-internet).
+`git add` is required because Nix flakes ignore untracked files in git repos.
+`nix flake lock` pins all input versions (fetches from the internet).
 
 ---
 
 ## Step 10: Set the ZFS Host ID
 
 ZFS embeds the host ID when creating pools. It must match
-`networking.hostId` from `hardware-configuration.nix` (value
-`163dd8b3`), or pools will not import after reboot.
+`networking.hostId` in `hardware-configuration.nix` (value `163dd8b3`), or
+pools will not import after reboot.
 
-The graphical live USB has a read-only `/etc`. Layer a writable overlay
-on top, then write the hostid:
+The live ISO has a read-only `/etc`. Write to it with an overlay:
 
 ```sh
 sudo rm /etc/hostid
@@ -202,10 +188,8 @@ sudo zgenhostid 163dd8b3
 
 Verify:
 ```sh
-hostid
+hostid    # should print 163dd8b3
 ```
-
-Should print `163dd8b3`.
 
 ---
 
@@ -219,22 +203,14 @@ sudo nix run github:nix-community/disko -- \
   /tmp/nix-nexus/hosts/home-server/disko.nix
 ```
 
-This will:
-- Partition the NVMe (ESP, swap, L2ARC, rpool)
-- Partition both HDDs
-- Create ZFS pool `rpool` on the NVMe with datasets: nix, persist,
-  postgres
-- Create ZFS pool `tank` as HDD mirror with SSD L2ARC and datasets:
-  safe, data, media, backups
-- Mount everything under `/mnt`
+This partitions the NVMe (ESP, swap, L2ARC, rpool) and both HDDs, creates
+ZFS pools `rpool` and `tank`, and mounts everything under `/mnt`.
 
 Verify:
 ```sh
 mount | grep /mnt
 sudo zpool status rpool    # single SSD vdev, ONLINE
 sudo zpool status tank     # mirror of 2 HDDs + cache, ONLINE
-ls /mnt/persist
-sudo ls /mnt/boot
 ```
 
 ---
@@ -243,12 +219,12 @@ sudo ls /mnt/boot
 
 ```sh
 sudo mkdir -p /mnt/persist/var/lib/sops-nix
-sudo cp /tmp/server-age-key.txt /mnt/persist/var/lib/sops-nix/key.txt
+sudo cp /tmp/host-age-key.txt /mnt/persist/var/lib/sops-nix/key.txt
 sudo chmod 600 /mnt/persist/var/lib/sops-nix/key.txt
 ```
 
-This is the server's identity for decrypting secrets. Without it, no
-sops-managed secrets will work after boot.
+This is the server's identity for decrypting secrets at boot. Without it,
+no sops-managed secrets will work after reboot.
 
 ---
 
@@ -264,52 +240,65 @@ sudo ssh-keygen -t rsa -b 4096 \
   -f /mnt/persist/etc/ssh/ssh_host_rsa_key -N ""
 ```
 
-These persist across reboots via impermanence, giving the server a
-stable SSH fingerprint.
+These persist across reboots (via impermanence), giving the server a stable
+SSH fingerprint.
 
 ---
 
-## Step 14: Create the User Home Directory
+## Step 14: Create User Home Directory
 
 ```sh
 sudo mkdir -p /mnt/persist/home/heikov/.ssh
 sudo chmod 700 /mnt/persist/home/heikov/.ssh
 ```
 
+Repeat for each user defined on this host.
+
 ---
 
 ## Step 15: Install NixOS
 
 ```sh
-sudo nixos-install --flake /tmp/nix-nexus#home-server --no-root-passwd
+sudo nixos-install \
+  --flake /tmp/nix-nexus#home-server \
+  --no-root-passwd
 ```
 
-- `--no-root-passwd` is safe because root login is disabled in the
-  config. The heikov user's password is managed by sops.
-- This builds and installs the entire system closure. Expect it to take
-  a while (it downloads and compiles packages).
+`--no-root-passwd` is safe because root login is disabled in the config.
+The `heikov` user's password is managed by sops.
+
+This builds the full system closure -- expect a while on first run.
 
 ---
 
-## Step 16: Save Your Changes
+## Step 16: Save Changes and Push a PR
 
-The modified repo in `/tmp/nix-nexus` will be lost when you reboot
-(it lives on the live environment's RAM). Copy it back to the data USB:
+The modified repo in `/tmp/nix-nexus` lives only in the live environment's
+RAM and will be lost on reboot. Copy it back to the data USB:
 
 ```sh
 sudo cp -r /tmp/nix-nexus $USB/nix-nexus-configured
 sudo umount $USB
 ```
 
-Later, from another machine, push the changes to GitHub so the server's
-auto-upgrade timer can pull them:
+From your workstation, create a branch and open a PR:
 
 ```sh
-cd nix-nexus-configured
-git add -A
-git commit -m "configure disk IDs, server age key, user password, and lock flake inputs"
-git push
+cp -r /path/to/usb/nix-nexus-configured ./nix-nexus
+cd nix-nexus
+
+git checkout -b setup/home-server
+
+git add hosts/home-server/disko.nix flake.lock
+git commit -m "configure home-server: disk IDs and flake lock"
+
+git push -u origin setup/home-server
+# Open a PR on GitHub. CI will validate the config.
+# Once CI passes, merge to main. The server will auto-upgrade at 04:00.
 ```
+
+> **Note:** Do not commit secrets or private keys. The secrets file is
+> already encrypted by sops -- it is safe to commit.
 
 ---
 
@@ -319,23 +308,20 @@ git push
 sudo reboot
 ```
 
-Remove the installer USB during reboot (or set NVMe as first boot
-device in BIOS beforehand).
+Remove the installer USB during reboot (or set the NVMe as first boot device
+in BIOS beforehand).
 
 ---
 
 ## Step 18: Verify
 
-The server gets its IP via DHCP. Find it through your router's admin
-page, or use a keyboard and monitor on the console to run `ip a`.
+The server gets its IP via DHCP. Find it via your router's admin page, or
+attach a keyboard and monitor and run `ip a`.
 
-SSH in from another machine on the same network:
+SSH in:
 ```sh
 ssh heikov@<server-ip>
 ```
-
-Use the password from step 7, or SSH key auth if the heikov key is on
-your client machine.
 
 Run checks:
 ```sh
@@ -352,12 +338,9 @@ ls /persist/etc/ssh/                  # SSH host keys present
 ls /persist/home/heikov/              # user home exists
 
 # Secrets decrypted at runtime
-sudo ls /run/secrets/                 # heikov_password_hash,
-                                      # mqtt_password_homeassistant,
-                                      # mqtt_password_zigbee2mqtt,
-                                      # borg_passphrase
+sudo ls /run/secrets/                 # heikov_password_hash, mqtt_*, borg_passphrase
 
-# Services
+# Services (adjust based on which are enabled)
 systemctl status caddy
 systemctl status home-assistant
 systemctl status mosquitto
@@ -375,8 +358,8 @@ sensors                               # temp and fan readings
 
 ## Step 19: Network DNS
 
-The server currently uses DHCP. Create a static DHCP reservation on the
-Fritz!Box so the IP stays stable, then point DNS at it.
+The server uses DHCP by default. Create a static DHCP reservation on your
+router so the IP stays stable, then configure DNS.
 
 Clients need to resolve `*.home-server.lan` to the server's IP.
 
@@ -388,8 +371,8 @@ Clients need to resolve `*.home-server.lan` to the server's IP.
 <server-ip>  coolercontrol.home-server.lan
 ```
 
-**Better option** -- configure a local DNS server (Pi-hole, Unbound,
-etc.) with a wildcard A record for `*.home-server.lan`.
+**Better option** -- configure a local DNS server (Pi-hole, Unbound, etc.)
+with a wildcard A record for `*.home-server.lan`.
 
 When ready for a static IP, uncomment the `systemd.network` block in
 `hosts/home-server/default.nix` and set `networking.useDHCP = false`.
@@ -401,7 +384,7 @@ When ready for a static IP, uncomment the `systemd.network` block in
 ### Home Assistant
 
 1. Open `https://hass.home-server.lan` (accept the self-signed cert)
-2. Complete the onboarding wizard (create account, set timezone/location)
+2. Complete the onboarding wizard
 3. Add MQTT: Settings > Devices & Services > Add Integration > MQTT
    - Broker: `localhost`, Port: `1883`
    - Username: `homeassistant`
@@ -410,9 +393,8 @@ When ready for a static IP, uncomment the `systemd.network` block in
 ### Zigbee2MQTT
 
 1. Open `https://z2m.home-server.lan`
-2. The Sonoff adapter should show at `/dev/zigbee`
-3. Click "Permit Join" to pair devices (paired devices auto-discover in
-   Home Assistant via MQTT)
+2. The Sonoff adapter should appear at `/dev/zigbee`
+3. Click "Permit Join" to pair devices (auto-discover in Home Assistant via MQTT)
 
 ### CoolerControl
 
@@ -433,31 +415,51 @@ sudo borg list /tank/backups/borg
 
 ## Step 21: Final Checks
 
-### Firewall
 ```sh
+# Firewall -- only SSH, HTTP, HTTPS should be open
 sudo nft list ruleset
-```
-Only TCP 22 (SSH), 80 (HTTP), and 443 (HTTPS) should be open. MQTT
-(1883) is localhost-only.
 
-### Auto-upgrade timer
-```sh
+# Auto-upgrade timer -- next trigger should be 04:00
 systemctl list-timers nixos-upgrade.timer
-```
-Should show the next trigger at 04:00.
 
-### Test a clean reboot
-```sh
+# Test a clean reboot
 sudo reboot
 ```
 
-After it comes back, confirm:
+After reboot, confirm:
 - All services are running
 - `/` is a fresh empty tmpfs
-- Persistent state survived (`/var/lib/hass`, `/var/lib/zigbee2mqtt`,
-  etc.)
+- Persistent state survived (`/var/lib/hass`, `/var/lib/zigbee2mqtt`, etc.)
 - Secrets are decrypted (`/run/secrets/`)
 - User password still works
+
+---
+
+## Developer Setup
+
+To install pre-commit hooks for this repo on your workstation:
+
+```sh
+cd nix-nexus
+direnv allow    # installs hooks via devShell automatically
+```
+
+Or without direnv:
+```sh
+nix develop     # enters the devShell, which installs hooks on entry
+```
+
+Hooks run on every `git commit`:
+- **nixfmt-rfc-style** -- formats staged `.nix` files
+- **check-merge-conflicts** -- catches leftover conflict markers
+- **detect-private-key** -- prevents committing private keys
+
+Local validation:
+```sh
+nix fmt                                  # format all Nix files
+nix flake check                          # validate flake schema
+nix eval .#nixosConfigurations.<host>.config.system.build.toplevel --apply 'x: "ok"'
+```
 
 ---
 
@@ -470,8 +472,10 @@ After it comes back, confirm:
 | No network after boot | NIC name doesn't match `en*` | Check `ip link`; update `matchConfig.Name` in `hosts/home-server/default.nix` |
 | Zigbee adapter not found | USB stick missing or udev mismatch | Check `ls -l /dev/zigbee` and `lsusb` for CP2102N (`10c4:ea60`) |
 | Fan sensors missing | nct6775 chip ID mismatch | Run `sensors-detect`, update `force_id` in `hardware-configuration.nix` |
-| State lost after reboot | Path not in impermanence | Add it to `modules/nixos/impermanence.nix` |
-| Can't log in after reboot | `heikov_password_hash` missing from secrets | Add it per steps 7-8, push, rebuild |
-| SSH fingerprint changes | Host keys not in `/persist/etc/ssh/` | Regenerate per step 13 |
+| State lost after reboot | Path not in impermanence | Add it to `modules/nixos/impermanence.nix` or the host's `default.nix` |
+| Can't log in after reboot | `<username>_password_hash` missing from secrets | Add per steps 7-8, push PR, wait for auto-upgrade |
+| SSH fingerprint changes | Host keys not persisted | Regenerate per step 13 |
 | `nixos-install` fails to evaluate | `flake.lock` missing or files not staged | Run `git add -A && nix flake lock && git add flake.lock` |
 | `sops` can't decrypt | Wrong SSH key or age key mismatch | Verify `~/.ssh/id_ed25519` is in place and its public key is listed in `.sops.yaml` |
+| Pre-commit hooks not running | Hooks not installed | Run `direnv allow` or `nix develop` in the repo root |
+| CI fails on PR | Formatting or eval error | Run `nix fmt` then `nix eval .#nixosConfigurations.<host>...` locally to debug |
