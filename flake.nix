@@ -21,31 +21,49 @@
     };
 
     impermanence.url = "github:nix-community/impermanence";
+
+    nvf = {
+      url = "github:notashelf/nvf";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   outputs =
     {
+      self,
       nixpkgs,
       nixpkgs-unstable,
       home-manager,
       sops-nix,
       disko,
       impermanence,
+      nvf,
       ...
     }:
     let
       system = "x86_64-linux";
+      pkgs = import nixpkgs { inherit system; };
       pkgs-unstable = import nixpkgs-unstable {
         inherit system;
         config.allowUnfree = false;
       };
     in
     {
+      formatter.${system} = pkgs.nixfmt-tree;
+
+      checks.${system}.formatting = pkgs.runCommand "nixfmt-check" { } ''
+        ${pkgs.nixfmt-tree}/bin/nixfmt --check ${self}
+        touch $out
+      '';
+
       nixosConfigurations.home-server = nixpkgs.lib.nixosSystem {
         inherit system;
         modules = [
           home-manager.nixosModules.home-manager
-          { home-manager.extraSpecialArgs = { inherit pkgs-unstable; }; }
+          {
+            home-manager.extraSpecialArgs = { inherit pkgs-unstable; };
+            home-manager.sharedModules = [ nvf.homeManagerModules.default ];
+          }
           sops-nix.nixosModules.sops
           disko.nixosModules.disko
           impermanence.nixosModules.impermanence
