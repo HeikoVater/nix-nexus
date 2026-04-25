@@ -23,7 +23,7 @@
     impermanence.url = "github:nix-community/impermanence";
 
     nvf = {
-      url = "github:notashelf/nvf";
+      url = "github:notashelf/nvf/ef1f22efaf4aa37ba9382a7d1807fa8ac9c097fd";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
@@ -62,7 +62,7 @@
         hooks = {
           nixfmt-rfc-style.enable = true;
           check-merge-conflicts.enable = true;
-          detect-private-key.enable = true;
+          detect-private-keys.enable = true;
         };
       };
 

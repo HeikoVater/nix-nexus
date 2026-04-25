@@ -85,7 +85,7 @@ Pre-commit hooks are installed automatically via `direnv` (or `nix develop`).
 They run on every commit:
 - **nixfmt-rfc-style** -- formats staged `.nix` files
 - **check-merge-conflicts** -- catches leftover conflict markers
-- **detect-private-key** -- prevents committing private keys
+- **detect-private-keys** -- prevents committing private keys
 
 ### CI (GitHub Actions)
 

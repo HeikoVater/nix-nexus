@@ -48,6 +48,10 @@
   networking.hostName = "home-server";
   time.timeZone = "Europe/Berlin";
   i18n.defaultLocale = "en_US.UTF-8";
+  i18n.supportedLocales = [
+    "en_US.UTF-8/UTF-8"
+    "de_DE.UTF-8/UTF-8"
+  ];
 
   # ─── Networking ────────────────────────────────────────────────
   networking.useDHCP = true;
@@ -94,8 +98,6 @@
       "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIP3lk60aE5mZZPwCMEDOxcAIJjLfdUDbuPR4slUWnBuj heikov"
     ];
   };
-
-  security.sudo.wheelNeedsPassword = false;
 
   # ─── Firewall ──────────────────────────────────────────────────
   # Base firewall — only SSH is always open. Service-specific ports

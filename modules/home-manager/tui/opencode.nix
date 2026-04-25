@@ -1,21 +1,12 @@
 {
   config,
   lib,
-  pkgs,
   pkgs-unstable,
   ...
 }:
 
 let
   cfg = config.user.tui.opencode;
-  big-provider = "opencode";
-  big-model = "claude-opus-4-6";
-  small-provider = "opencode";
-  small-model = "claude-sonnet-4-6";
-  # big-provider = "openai";
-  # big-model = "gpt-5.3-codex";
-  # small-provider = "openai";
-  # small-model = "gpt-5.3-codex";
 in
 {
   options.user.tui.opencode = {
@@ -31,53 +22,25 @@ in
         share = "disabled";
         autoupdate = "notify";
 
-        enabled_providers = [
-          "opencode"
-          "openai"
-        ];
-
         default_agent = "plan";
 
-        # provider = {
-        #   opencode.models = {
-        #     "claude-opus-4.5".options = {
-        #       reasoningEffort = "high";
-        #     };
-        #   };
-        #   openai.models = {
-        #     "gpt-5.2-codex".options = {
-        #       reasoningEffort = "high";
-        #     };
-        #   };
-        # };
+        enabled_providers = [
+          "opencode"
+        ];
+
+        small_model = "opencode/claude-haiku-4-5";
+
+        provider.opencode.options.setCacheKey = true;
 
         agent = {
-          build = {
-            model = "${small-provider}/${small-model}";
-          };
           plan = {
-            model = "${big-provider}/${big-model}";
+            model = "opencode/claude-opus-4-6";
+            variant = "max";
           };
-          # build = {
-          #   description = "Full development work with all tools enabled.";
-          #   mode = "primary";
-          #   model = "${small-model}";
-          #   tools = {
-          #     write = true;
-          #     edit = true;
-          #     bash = true;
-          #   };
-          # };
-          # plan = {
-          #   description = "Analysis and planning without making changes";
-          #   mode = "primary";
-          #   model = "${big-model}";
-          #   tools = {
-          #     write = false;
-          #     edit = false;
-          #     bash = false;
-          #   };
-          # };
+          build = {
+            model = "opencode/claude-sonnet-4-6";
+            variant = "high";
+          };
         };
 
         formatter = {
@@ -94,45 +57,49 @@ in
         permission = {
           edit = "allow";
           bash = {
-            # "*" = "ask";
+            "*" = "ask";
 
             # nix
-            "nix-rebuild" = "deny";
-            "nh os" = "deny";
+            "nixos-rebuild*" = "deny";
+            "nh os*" = "deny";
 
             # sops
-            "sops" = "ask";
+            "sops*" = "ask";
+
+            # tools
+            "grep*" = "allow";
+            "rg*" = "allow";
 
             # git — read-only operations allowed
-            "git status" = "allow";
-            "git diff" = "allow";
-            "git log" = "allow";
-            "git show" = "allow";
-            "git blame" = "allow";
-            "git grep" = "allow";
-            "git reflog" = "allow";
-            "git add" = "allow";
-            "git restore" = "allow";
-            "git rm" = "allow";
-            "git mv" = "allow";
-            "git fetch" = "allow";
+            "git status*" = "allow";
+            "git diff*" = "allow";
+            "git log*" = "allow";
+            "git show*" = "allow";
+            "git blame*" = "allow";
+            "git grep*" = "allow";
+            "git reflog*" = "allow";
+            "git add*" = "allow";
+            "git restore*" = "allow";
+            "git rm*" = "allow";
+            "git mv*" = "allow";
+            "git fetch*" = "allow";
 
-            "git commit" = "ask";
-            "git checkout" = "ask";
-            "git switch" = "ask";
-            "git branch" = "ask";
-            "git pull" = "ask";
-            "git remote" = "ask";
-            "git revert" = "ask";
+            "git commit*" = "ask";
+            "git checkout*" = "ask";
+            "git switch*" = "ask";
+            "git branch*" = "ask";
+            "git pull*" = "ask";
+            "git remote*" = "ask";
+            "git revert*" = "ask";
 
-            "git push" = "deny";
-            "git merge" = "deny";
-            "git rebase" = "deny";
-            "git cherry-pick" = "deny";
-            "git reset" = "deny";
-            "git filter-repo" = "deny";
-            "git gc" = "deny";
-            "git prune" = "deny";
+            "git push*" = "deny";
+            "git merge*" = "deny";
+            "git rebase*" = "deny";
+            "git cherry-pick*" = "deny";
+            "git reset*" = "deny";
+            "git filter-repo*" = "deny";
+            "git gc*" = "deny";
+            "git prune*" = "deny";
           };
           skill = "ask";
           webfetch = "allow";
