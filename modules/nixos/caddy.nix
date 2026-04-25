@@ -24,7 +24,7 @@ in
     # both the service and caddy are enabled. This file only sets up
     # the base Caddy service and firewall rules.
     #
-    # DNS: Add A records for *.${cfg.domain} → 192.168.188.2
+    # DNS: Add A records for *.${cfg.domain} → localhost's ip address
     #   - In the Fritz!Box: Home Network → Network → Network Settings
     #     → DNS Rebind Protection → add ${cfg.domain}
     #   - Or add entries to your Pi-hole local DNS once it's running.

@@ -39,7 +39,7 @@ in
       services.zigbee2mqtt = {
         enable = true;
         settings = {
-          homeassistant = true; # enables HA MQTT discovery
+          # homeassistant discovery is enabled by default upstream
           permit_join = false; # flip to true in the frontend to pair new devices
 
           mqtt = {

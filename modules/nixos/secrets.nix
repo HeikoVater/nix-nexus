@@ -13,13 +13,21 @@
   # Secrets are declared conditionally — only services that are
   # actually enabled will have their secrets decrypted.
   sops = {
-    defaultSopsFile = ../../secrets/secrets.yaml;
+    defaultSopsFile = ../../secrets/hosts/home-server.yaml;
     defaultSopsFormat = "yaml";
 
     # Path to the age key on the server (created during setup)
     age.keyFile = "/var/lib/sops-nix/key.txt";
 
     secrets = lib.mkMerge [
+      # Login password — always needed since root is tmpfs and
+      # /etc/shadow is wiped every reboot
+      {
+        heikov_password_hash = {
+          neededForUsers = true;
+        };
+      }
+
       (lib.mkIf config.homelab.mosquitto.enable {
         mqtt_password_homeassistant = {
           owner = "mosquitto";

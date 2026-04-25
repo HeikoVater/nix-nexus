@@ -15,24 +15,24 @@ in
 
     repo = lib.mkOption {
       type = lib.types.str;
-      default = "/mnt/storage/backups/borg";
-      description = "Path to the borg repository on the ZFS pool.";
+      default = "/tank/backups/borg";
+      description = "Path to the borg repository on the ZFS tank pool.";
     };
   };
 
   config = lib.mkIf cfg.enable {
     # ─── BorgBackup ───────────────────────────────────────────────
     # Daily backups of all enabled service state to a borg repo on
-    # the local ZFS mirror pool (2x12 TB).
+    # the local ZFS mirror pool (tank — 2x12 TB).
     #
     # Backup paths are derived automatically from which homelab
     # services are enabled — disable a service and its state is
     # no longer backed up.
     #
     # Prerequisites:
-    #   1. ZFS pool mounted (adjust repo path above if needed)
-    #   2. Create the dataset:  zfs create storage/backups
-    #   3. The borg repo is initialised automatically on first run.
+    #   1. ZFS tank pool imported and tank/backups mounted at
+    #      /tank/backups (handled by disko).
+    #   2. The borg repo is initialised automatically on first run.
     #
     # Restore a file:
     #   borg list ${cfg.repo}

@@ -20,8 +20,8 @@
     opencode.enable = true;
   };
 
-  home.username = "admin";
-  home.homeDirectory = "/home/admin";
+  home.username = "heikov";
+  home.homeDirectory = "/home/heikov";
   home.stateVersion = "25.11";
 
   programs.home-manager.enable = true;

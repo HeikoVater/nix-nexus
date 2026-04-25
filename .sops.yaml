@@ -1,24 +1,12 @@
 # ─── sops-nix Configuration ──────────────────────────────────────
-# Setup steps:
-#   1. Generate an age key on the server:
-#        sudo mkdir -p /var/lib/sops-nix
-#        sudo age-keygen -o /var/lib/sops-nix/key.txt
-#
-#   2. Paste the age public key below (replacing the placeholder).
-#
-#   3. Encrypt/edit secrets:
-#        nix-shell -p sops --run 'sops secrets/secrets.yaml'
-#
-#   4. After editing, commit the encrypted secrets/secrets.yaml.
-#      The plaintext is NEVER stored on disk outside of sops.
 keys:
   # hosts (age)
-  # - &server age1xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx # ← replace with your server's age public key
+  - &home-server age1hc2gmf9e0ewfjss446qengyqjymq5e6mysga62ml6zxyf0qeyyaq2t2wnw
   # users (ssh)
   - &heikov ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIP3lk60aE5mZZPwCMEDOxcAIJjLfdUDbuPR4slUWnBuj heikov
 creation_rules:
-  - path_regex: secrets/.*\.yaml$
+  - path_regex: secrets/hosts/home-server\.yaml$
     key_groups:
       - age:
-          # - *server
+          - *home-server
           - *heikov

@@ -14,6 +14,13 @@
       url = "github:Mic92/sops-nix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+
+    disko = {
+      url = "github:nix-community/disko";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
+    impermanence.url = "github:nix-community/impermanence";
   };
 
   outputs =
@@ -22,6 +29,8 @@
       nixpkgs-unstable,
       home-manager,
       sops-nix,
+      disko,
+      impermanence,
       ...
     }:
     let
@@ -38,6 +47,8 @@
           home-manager.nixosModules.home-manager
           { home-manager.extraSpecialArgs = { inherit pkgs-unstable; }; }
           sops-nix.nixosModules.sops
+          disko.nixosModules.disko
+          impermanence.nixosModules.impermanence
           ./modules/nixos
           ./hosts/home-server
         ];

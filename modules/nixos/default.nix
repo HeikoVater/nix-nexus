@@ -1,6 +1,7 @@
 {
   imports = [
     ./secrets.nix
+    ./impermanence.nix
     ./caddy.nix
     ./mosquitto.nix
     ./home-assistant.nix
@@ -8,5 +9,6 @@
     ./backups.nix
     ./auto-upgrade.nix
     ./nh.nix
+    ./coolercontrol.nix
   ];
 }
