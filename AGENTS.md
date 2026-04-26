@@ -171,14 +171,13 @@ Rules:
   Nix store.
 - Host secrets are declared in `modules/nixos/secrets.nix`, conditionally based
   on which services are enabled.
-- At runtime they are decrypted to `/run/secrets/<name>`.
 - Reference them via `config.sops.secrets.<name>.path`.
 - To inject a secret into a service config file, use a
   `systemd.services.<name>.preStart` script.
 - Edit secrets with `sops secrets/hosts/<hostname>.yaml`.
 - The `.sops.yaml` file controls which age/SSH keys can decrypt which files.
-- The age key lives at `/var/lib/sops-nix/key.txt` which must be persisted via
-  impermanence.
+- The age key lives at `/persist/var/lib/sops-nix/key.txt` so it is available
+  before users are recreated during boot.
 
 User secrets (for sops-menu) live in `secrets/users/<username>.yaml`. See
 `secrets/users/example.yaml` for the schema.

@@ -1,5 +1,5 @@
 {
-  description = "NixOS configuration for nix-nexus";
+  description = "NixOS configuration for home servers";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-25.11";
@@ -70,8 +70,11 @@
         inherit (self.checks.${system}.pre-commit-check) shellHook;
       };
 
-      nixosConfigurations.home-server = nixpkgs.lib.nixosSystem {
+      nixosConfigurations.mu = nixpkgs.lib.nixosSystem {
         inherit system;
+        specialArgs = {
+          hostname = "mu";
+        };
         modules = [
           home-manager.nixosModules.home-manager
           {
@@ -82,7 +85,7 @@
           disko.nixosModules.disko
           impermanence.nixosModules.impermanence
           ./modules/nixos
-          ./hosts/home-server
+          ./hosts/mu
         ];
       };
     };

@@ -43,7 +43,7 @@ in
     # whole machine. Consider periodically copying the borg repo
     # off-site (rsync to a remote server, rclone to cloud, etc.).
 
-    services.borgbackup.jobs.home-server = {
+    services.borgbackup.jobs.${config.networking.hostName} = {
       paths =
         (lib.optional ha.enable "/var/lib/hass") ++ (lib.optional z2m.enable "/var/lib/zigbee2mqtt");
 

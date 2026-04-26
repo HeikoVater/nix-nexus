@@ -25,21 +25,22 @@ in
         default_agent = "plan";
 
         enabled_providers = [
-          "opencode"
+          # "opencode"
+          "openai"
         ];
 
-        small_model = "opencode/claude-haiku-4-5";
+        small_model = "openai/gpt-5.4-mini";
 
-        provider.opencode.options.setCacheKey = true;
+        provider.openai.options.setCacheKey = true;
 
         agent = {
           plan = {
-            model = "opencode/claude-opus-4-6";
-            variant = "max";
+            model = "openai/gpt-5.4";
+            variant = "xhigh";
           };
           build = {
-            model = "opencode/claude-sonnet-4-6";
-            variant = "high";
+            model = "openai/gpt-5.4";
+            variant = "medium";
           };
         };
 
@@ -60,6 +61,9 @@ in
             "*" = "ask";
 
             # nix
+            "nix fmt" = "allow";
+            "nix eval*" = "allow";
+            "nix flake check" = "allow";
             "nixos-rebuild*" = "deny";
             "nh os*" = "deny";
 

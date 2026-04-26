@@ -6,7 +6,8 @@
 
 {
   # ─── sops-nix ─────────────────────────────────────────────────
-  # Decrypts secrets at activation time into /run/secrets/<name>.
+  # Decrypts secrets at activation time. User password hashes stay in sops and
+  # are made available early enough for declarative user creation.
   # The age key must exist on the server before first deploy.
   # See .sops.yaml in the repo root for setup instructions.
   #
@@ -19,8 +20,9 @@
   sops = {
     defaultSopsFormat = "yaml";
 
-    # Path to the age key on the server (created during setup)
-    age.keyFile = "/var/lib/sops-nix/key.txt";
+    # Read the age key directly from /persist so password hashes can be
+    # decrypted before impermanence mounts /var/lib/sops-nix.
+    age.keyFile = "/persist/var/lib/sops-nix/key.txt";
 
     secrets = lib.mkMerge [
       (lib.mkIf config.homelab.mosquitto.enable {

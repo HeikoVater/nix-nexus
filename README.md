@@ -13,7 +13,7 @@ with CI validation, and servers auto-deploy from `main`.
 ├── .envrc                              # Direnv -- activates devShell, installs pre-commit hooks
 ├── .github/workflows/ci.yml           # CI -- runs on every PR to main
 ├── hosts/
-│   ├── home-server/                    # Per-host configuration
+│   ├── mu/                             # Per-host configuration
 │   │   ├── default.nix                 # Service toggles, networking, users
 │   │   ├── hardware-configuration.nix  # Boot, kernel, storage
 │   │   └── disko.nix                   # Declarative disk layout
@@ -140,15 +140,18 @@ nixos-rebuild switch --flake github:<org>/<repo>
 
 Secrets are encrypted at rest with [sops-nix](https://github.com/Mic92/sops-nix)
 using age keys, decrypted to `/run/secrets/<name>` at activation time.
+User password hashes also stay in sops and are made available early enough
+during boot for declarative user creation.
 
 ```sh
 sops secrets/hosts/<hostname>.yaml       # edit host secrets
 sops secrets/users/<username>.yaml       # edit user secrets (sops-menu)
 ```
 
-The age key must be present on the server at `/var/lib/sops-nix/key.txt`
-before the first deploy. This path is persisted via impermanence. See
-`.sops.yaml` for encryption key configuration and `secrets/*/example.yaml`
+The age key must be present on the server at
+`/persist/var/lib/sops-nix/key.txt` before the first deploy. It needs to be
+reachable during early boot, before users are recreated.
+See `.sops.yaml` for encryption key configuration and `secrets/*/example.yaml`
 for file format reference.
 
 ## Adding Hosts, Users, and Modules

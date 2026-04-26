@@ -1,4 +1,5 @@
 {
+  hostname,
   config,
   pkgs,
   lib,
@@ -45,7 +46,7 @@
   };
 
   # ─── Basic System ──────────────────────────────────────────────
-  networking.hostName = "home-server";
+  networking.hostName = hostname;
   time.timeZone = "Europe/Berlin";
   i18n.defaultLocale = "en_US.UTF-8";
   i18n.supportedLocales = [
@@ -131,7 +132,7 @@
   };
 
   # ─── Secrets ───────────────────────────────────────────────────
-  sops.defaultSopsFile = ../../secrets/hosts/home-server.yaml;
+  sops.defaultSopsFile = ../../secrets/hosts/mu.yaml;
 
   sops.secrets.heikov_password_hash = {
     neededForUsers = true;

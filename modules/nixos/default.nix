@@ -11,4 +11,8 @@
     ./nh.nix
     ./coolercontrol.nix
   ];
+
+  # Root is tmpfs, so user accounts need to be recreated from declarative
+  # config on every activation instead of preserving mutable shadow state.
+  users.mutableUsers = false;
 }

@@ -13,7 +13,7 @@ in
 
     domain = lib.mkOption {
       type = lib.types.str;
-      default = "home-server.lan";
+      default = "${config.networking.hostName}.lan";
       description = "Base domain for service subdomains (e.g. hass.<domain>).";
     };
   };

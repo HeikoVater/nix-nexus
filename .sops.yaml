@@ -1,12 +1,12 @@
 # ─── sops-nix Configuration ──────────────────────────────────────
 keys:
   # hosts (age)
-  - &home-server age1hc2gmf9e0ewfjss446qengyqjymq5e6mysga62ml6zxyf0qeyyaq2t2wnw
+  - &mu age1hc2gmf9e0ewfjss446qengyqjymq5e6mysga62ml6zxyf0qeyyaq2t2wnw
   # users (ssh)
   - &heikov ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIP3lk60aE5mZZPwCMEDOxcAIJjLfdUDbuPR4slUWnBuj heikov
 creation_rules:
-  - path_regex: secrets/hosts/home-server\.yaml$
+  - path_regex: secrets/hosts/mu\.yaml$
     key_groups:
       - age:
-          - *home-server
+          - *mu
           - *heikov

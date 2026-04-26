@@ -4,8 +4,8 @@ Step-by-step installation of a new host from a graphical NixOS live USB.
 Everything happens on the server itself -- no separate workstation needed for
 the initial install. Changes are then pushed as a PR from your workstation.
 
-This guide uses `home-server` and `heikov` as concrete examples throughout.
-Replace them with your actual hostname and username where indicated.
+This guide uses `mu` and `heikov` as concrete examples throughout. Replace
+them with your actual hostname and username where indicated.
 
 ## What You Need
 
@@ -111,7 +111,7 @@ Note the base IDs (without the `-partN` suffix) for each disk:
 ## Step 6: Edit Disk IDs in disko.nix
 
 ```sh
-vim /tmp/nix-nexus/hosts/home-server/disko.nix
+vim /tmp/nix-nexus/hosts/mu/disko.nix
 ```
 
 Replace the three placeholders with the disk IDs from step 5:
@@ -141,7 +141,7 @@ persists across reboots via sops.
 ## Step 8: Edit Secrets
 
 ```sh
-sops /tmp/nix-nexus/secrets/hosts/home-server.yaml
+sops /tmp/nix-nexus/secrets/hosts/mu.yaml
 ```
 
 sops decrypts using `~/.ssh/id_ed25519` directly -- no key conversion needed.
@@ -200,7 +200,7 @@ hostid    # should print 163dd8b3
 ```sh
 sudo nix run github:nix-community/disko -- \
   --mode destroy,format,mount \
-  /tmp/nix-nexus/hosts/home-server/disko.nix
+  /tmp/nix-nexus/hosts/mu/disko.nix
 ```
 
 This partitions the NVMe (ESP, swap, L2ARC, rpool) and both HDDs, creates
@@ -224,7 +224,8 @@ sudo chmod 600 /mnt/persist/var/lib/sops-nix/key.txt
 ```
 
 This is the server's identity for decrypting secrets at boot. Without it,
-no sops-managed secrets will work after reboot.
+no sops-managed secrets will work after reboot. Store it under `/persist`
+because it must be available early during boot.
 
 ---
 
@@ -260,7 +261,7 @@ Repeat for each user defined on this host.
 
 ```sh
 sudo nixos-install \
-  --flake /tmp/nix-nexus#home-server \
+  --flake /tmp/nix-nexus#mu \
   --no-root-passwd
 ```
 
@@ -287,12 +288,12 @@ From your workstation, create a branch and open a PR:
 cp -r /path/to/usb/nix-nexus-configured ./nix-nexus
 cd nix-nexus
 
-git checkout -b setup/home-server
+git checkout -b setup/mu
 
-git add hosts/home-server/disko.nix flake.lock
-git commit -m "configure home-server: disk IDs and flake lock"
+git add hosts/mu/disko.nix flake.lock
+git commit -m "configure mu: disk IDs and flake lock"
 
-git push -u origin setup/home-server
+git push -u origin setup/mu
 # Open a PR on GitHub. CI will validate the config.
 # Once CI passes, merge to main. The server will auto-upgrade at 04:00.
 ```
@@ -326,7 +327,7 @@ ssh heikov@<server-ip>
 Run checks:
 ```sh
 # System identity
-hostnamectl                           # should show "home-server"
+hostnamectl                           # should show "mu"
 df -h /                               # tmpfs, ~4 GB
 
 # ZFS
@@ -338,7 +339,7 @@ ls /persist/etc/ssh/                  # SSH host keys present
 ls /persist/home/heikov/              # user home exists
 
 # Secrets decrypted at runtime
-sudo ls /run/secrets/                 # heikov_password_hash, mqtt_*, borg_passphrase
+sudo ls /run/secrets/                 # mqtt_*, borg_passphrase (when enabled)
 
 # Services (adjust based on which are enabled)
 systemctl status caddy
@@ -361,21 +362,21 @@ sensors                               # temp and fan readings
 The server uses DHCP by default. Create a static DHCP reservation on your
 router so the IP stays stable, then configure DNS.
 
-Clients need to resolve `*.home-server.lan` to the server's IP.
+Clients need to resolve `*.mu.lan` to the server's IP.
 
 **Quick option** -- add to `/etc/hosts` on each client:
 ```
-<server-ip>  home-server.lan
-<server-ip>  hass.home-server.lan
-<server-ip>  z2m.home-server.lan
-<server-ip>  coolercontrol.home-server.lan
+<server-ip>  mu.lan
+<server-ip>  hass.mu.lan
+<server-ip>  z2m.mu.lan
+<server-ip>  coolercontrol.mu.lan
 ```
 
 **Better option** -- configure a local DNS server (Pi-hole, Unbound, etc.)
-with a wildcard A record for `*.home-server.lan`.
+with a wildcard A record for `*.mu.lan`.
 
 When ready for a static IP, uncomment the `systemd.network` block in
-`hosts/home-server/default.nix` and set `networking.useDHCP = false`.
+`hosts/mu/default.nix` and set `networking.useDHCP = false`.
 
 ---
 
@@ -383,7 +384,7 @@ When ready for a static IP, uncomment the `systemd.network` block in
 
 ### Home Assistant
 
-1. Open `https://hass.home-server.lan` (accept the self-signed cert)
+1. Open `https://hass.mu.lan` (accept the self-signed cert)
 2. Complete the onboarding wizard
 3. Add MQTT: Settings > Devices & Services > Add Integration > MQTT
    - Broker: `localhost`, Port: `1883`
@@ -392,13 +393,13 @@ When ready for a static IP, uncomment the `systemd.network` block in
 
 ### Zigbee2MQTT
 
-1. Open `https://z2m.home-server.lan`
+1. Open `https://z2m.mu.lan`
 2. The Sonoff adapter should appear at `/dev/zigbee`
 3. Click "Permit Join" to pair devices (auto-discover in Home Assistant via MQTT)
 
 ### CoolerControl
 
-1. Open `https://coolercontrol.home-server.lan`
+1. Open `https://coolercontrol.mu.lan`
 2. Configure fan curves using nct6775 sensor readings
 3. Cross-reference with `sensors` output
 
@@ -406,8 +407,8 @@ When ready for a static IP, uncomment the `systemd.network` block in
 
 Trigger a manual run to confirm BorgBackup works:
 ```sh
-sudo systemctl start borgbackup-job-home-server.service
-sudo journalctl -u borgbackup-job-home-server.service -f
+sudo systemctl start borgbackup-job-mu.service
+sudo journalctl -u borgbackup-job-mu.service -f
 sudo borg list /tank/backups/borg
 ```
 
@@ -430,7 +431,7 @@ After reboot, confirm:
 - All services are running
 - `/` is a fresh empty tmpfs
 - Persistent state survived (`/var/lib/hass`, `/var/lib/zigbee2mqtt`, etc.)
-- Secrets are decrypted (`/run/secrets/`)
+- Secrets are decrypted
 - User password still works
 
 ---
@@ -467,13 +468,13 @@ nix eval .#nixosConfigurations.<host>.config.system.build.toplevel --apply 'x: "
 
 | Symptom | Likely cause | Fix |
 |---|---|---|
-| Secrets not decrypting | Age key missing or mismatched | Verify `/persist/var/lib/sops-nix/key.txt` exists and its public key matches `.sops.yaml`; re-encrypt with `sops updatekeys` |
+| Secrets not decrypting | Age key missing, mismatched, or mounted too late | Verify `/persist/var/lib/sops-nix/key.txt` exists, `sops.age.keyFile` points there, and its public key matches `.sops.yaml`; re-encrypt with `sops updatekeys` if needed |
 | ZFS pool won't import | hostId mismatch (step 10 skipped) | Boot from USB, set the hostId, destroy and recreate pools with disko |
-| No network after boot | NIC name doesn't match `en*` | Check `ip link`; update `matchConfig.Name` in `hosts/home-server/default.nix` |
+| No network after boot | NIC name doesn't match `en*` | Check `ip link`; update `matchConfig.Name` in `hosts/mu/default.nix` |
 | Zigbee adapter not found | USB stick missing or udev mismatch | Check `ls -l /dev/zigbee` and `lsusb` for CP2102N (`10c4:ea60`) |
 | Fan sensors missing | nct6775 chip ID mismatch | Run `sensors-detect`, update `force_id` in `hardware-configuration.nix` |
 | State lost after reboot | Path not in impermanence | Add it to `modules/nixos/impermanence.nix` or the host's `default.nix` |
-| Can't log in after reboot | `<username>_password_hash` missing from secrets | Add per steps 7-8, push PR, wait for auto-upgrade |
+| Can't log in after reboot | `<username>_password_hash` missing, or the age key was unavailable before user creation | Add the password hash per steps 7-8 and check the journal for `cannot read keyfile` / `password file ... does not exist` |
 | SSH fingerprint changes | Host keys not persisted | Regenerate per step 13 |
 | `nixos-install` fails to evaluate | `flake.lock` missing or files not staged | Run `git add -A && nix flake lock && git add flake.lock` |
 | `sops` can't decrypt | Wrong SSH key or age key mismatch | Verify `~/.ssh/id_ed25519` is in place and its public key is listed in `.sops.yaml` |
