@@ -5,28 +5,34 @@
 }:
 
 let
-  cfg = config.homelab.caddy;
+  hasVirtualHosts = config.services.caddy.virtualHosts != { };
 in
 {
-  options.homelab.caddy = {
-    enable = lib.mkEnableOption "Caddy reverse proxy";
-
+  options.homelab = {
     domain = lib.mkOption {
       type = lib.types.str;
       default = "${config.networking.hostName}.lan";
       description = "Base domain for service subdomains (e.g. hass.<domain>).";
     };
+
+    hostIPv4 = lib.mkOption {
+      type = lib.types.nullOr lib.types.str;
+      default = null;
+      example = "192.168.188.2";
+      description = "Static IPv4 address assigned to this host.";
+    };
   };
 
-  config = lib.mkIf cfg.enable {
+  config = lib.mkIf hasVirtualHosts {
     # ─── Caddy Reverse Proxy ──────────────────────────────────────
-    # Each service module registers its own virtualHost here when
-    # both the service and caddy are enabled. This file only sets up
-    # the base Caddy service and firewall rules.
+    # Browser-facing service modules always register their own
+    # virtualHosts here and bind locally. This file only enables the
+    # base Caddy service and opens the shared HTTPS entrypoints when
+    # at least one web UI is present.
     #
-    # DNS: Add A records for *.${cfg.domain} → localhost's ip address
+    # DNS: Add A records for *.${config.homelab.domain} → this server's IP address
     #   - In the Fritz!Box: Home Network → Network → Network Settings
-    #     → DNS Rebind Protection → add ${cfg.domain}
+    #     → DNS Rebind Protection → add ${config.homelab.domain}
     #   - Or add entries to your Pi-hole local DNS once it's running.
     #   - Or use /etc/hosts on your client machines.
     #

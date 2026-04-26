@@ -342,7 +342,7 @@ ls /persist/home/heikov/              # user home exists
 sudo ls /run/secrets/                 # mqtt_*, borg_passphrase (when enabled)
 
 # Services (adjust based on which are enabled)
-systemctl status caddy
+systemctl status caddy               # when any web UI is enabled
 systemctl status home-assistant
 systemctl status mosquitto
 systemctl status zigbee2mqtt
@@ -359,10 +359,11 @@ sensors                               # temp and fan readings
 
 ## Step 19: Network DNS
 
-The server uses DHCP by default. Create a static DHCP reservation on your
-router so the IP stays stable, then configure DNS.
+`mu` is configured with the static IPv4 address `192.168.188.2` via
+`homelab.hostIPv4` in `hosts/mu/default.nix`.
 
-Clients need to resolve `*.mu.lan` to the server's IP.
+Browser-facing services are always served through Caddy over HTTPS, so clients
+need to resolve their `*.mu.lan` hostnames to the server's IP.
 
 **Quick option** -- add to `/etc/hosts` on each client:
 ```
@@ -373,10 +374,12 @@ Clients need to resolve `*.mu.lan` to the server's IP.
 ```
 
 **Better option** -- configure a local DNS server (Pi-hole, Unbound, etc.)
-with a wildcard A record for `*.mu.lan`.
+with records for `mu.lan` and the service subdomains you expose through Caddy.
 
-When ready for a static IP, uncomment the `systemd.network` block in
-`hosts/mu/default.nix` and set `networking.useDHCP = false`.
+If `homelab.pihole.enable = true`, Pi-hole will serve `mu.lan` plus Caddy-backed
+service aliases like `hass.mu.lan`, `z2m.mu.lan`, `coolercontrol.mu.lan`, and
+`pihole.mu.lan` automatically. Point your router's LAN DNS server setting at
+the server IP so clients actually query Pi-hole.
 
 ---
 
@@ -396,6 +399,12 @@ When ready for a static IP, uncomment the `systemd.network` block in
 1. Open `https://z2m.mu.lan`
 2. The Sonoff adapter should appear at `/dev/zigbee`
 3. Click "Permit Join" to pair devices (auto-discover in Home Assistant via MQTT)
+
+### Pi-hole
+
+1. Open `https://pihole.mu.lan`
+2. Point your router's LAN DNS server at the server IP so clients use Pi-hole
+3. Store the dashboard password hash in the `pihole_web_password_hash` secret
 
 ### CoolerControl
 

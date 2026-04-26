@@ -27,6 +27,7 @@ with CI validation, and servers auto-deploy from `main`.
 │   │   ├── impermanence.nix            # Persistent state declarations
 │   │   ├── secrets.nix                 # sops-nix secret declarations
 │   │   ├── caddy.nix                   # Reverse proxy
+│   │   ├── pihole.nix                  # DNS filtering + local DNS
 │   │   ├── home-assistant.nix          # Smart home automation
 │   │   ├── mosquitto.nix               # MQTT broker
 │   │   ├── zigbee2mqtt.nix             # Zigbee bridge
@@ -65,7 +66,10 @@ System services are toggled per-host in `hosts/<hostname>/default.nix`:
 
 ```nix
 homelab = {
-  caddy.enable = true;
+  hostIPv4 = "192.168.188.2";
+  # Optional override; defaults to "<hostname>.lan"
+  domain = "mu.lan";
+  pihole.enable = true;
   home-assistant.enable = true;
   mosquitto.enable = true;
   zigbee2mqtt.enable = true;
@@ -96,7 +100,14 @@ user = {
 
 Setting any toggle to `false` cleanly disables it and adjusts dependents
 automatically (firewall rules, backup paths, Caddy routes, persisted state,
-secrets).
+secrets). Browser-facing services always publish Caddy virtual hosts and start
+Caddy automatically when needed.
+
+When `homelab.pihole.enable = true`, Pi-hole serves DNS on port `53`, exposes
+its dashboard at `https://pihole.<domain>`, and creates local DNS aliases for
+all Caddy-backed service hostnames under `homelab.domain`. Set
+`homelab.hostIPv4` on statically addressed hosts so shared modules can refer to
+the same LAN address.
 
 ## Validation & CI
 

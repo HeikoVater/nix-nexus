@@ -37,6 +37,12 @@
       (lib.mkIf config.homelab.backups.enable {
         borg_passphrase = { };
       })
+
+      (lib.mkIf config.homelab.pihole.enable {
+        pihole_web_password_hash = {
+          restartUnits = [ "pihole-ftl.service" ];
+        };
+      })
     ];
   };
 }

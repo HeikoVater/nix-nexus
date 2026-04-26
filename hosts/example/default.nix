@@ -29,7 +29,10 @@
   #  Service Toggles
   # ═══════════════════════════════════════════════════════════════════
   homelab = {
-    caddy.enable = false;
+    # hostIPv4 = "192.168.188.2"; # set this on statically addressed hosts
+    # Optional override; defaults to "<hostname>.lan".
+    # domain = "example.lan";
+    pihole.enable = false;
     home-assistant.enable = false;
     mosquitto.enable = false;
     zigbee2mqtt.enable = false;

@@ -3,6 +3,7 @@
     ./secrets.nix
     ./impermanence.nix
     ./caddy.nix
+    ./pihole.nix
     ./mosquitto.nix
     ./home-assistant.nix
     ./zigbee2mqtt.nix

@@ -18,6 +18,8 @@ let
   z2m = config.homelab.zigbee2mqtt;
   mqtt = config.homelab.mosquitto;
   cc = config.homelab.coolercontrol;
+  caddy = config.services.caddy.enable;
+  pihole = config.homelab.pihole;
 in
 {
   environment.persistence."/persist" = {
@@ -37,7 +39,29 @@ in
     ++ (lib.optional ha.enable "/var/lib/hass")
     ++ (lib.optional z2m.enable "/var/lib/zigbee2mqtt")
     ++ (lib.optional mqtt.enable "/var/lib/mosquitto")
-    ++ (lib.optional cc.enable "/etc/coolercontrol");
+    ++ (lib.optional cc.enable "/etc/coolercontrol")
+    ++ (lib.optionals caddy [
+      {
+        directory = "/var/lib/caddy";
+        user = "caddy";
+        group = "caddy";
+        mode = "0700";
+      }
+    ])
+    ++ (lib.optionals pihole.enable [
+      {
+        directory = "/etc/pihole";
+        user = "pihole";
+        group = "pihole";
+        mode = "0700";
+      }
+      {
+        directory = "/var/lib/pihole";
+        user = "pihole";
+        group = "pihole";
+        mode = "0700";
+      }
+    ]);
 
     # ─── System Files ───────────────────────────────────────────
     files = [

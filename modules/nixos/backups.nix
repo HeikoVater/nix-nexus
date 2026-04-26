@@ -8,6 +8,7 @@ let
   cfg = config.homelab.backups;
   ha = config.homelab.home-assistant;
   z2m = config.homelab.zigbee2mqtt;
+  pihole = config.homelab.pihole;
 in
 {
   options.homelab.backups = {
@@ -45,7 +46,10 @@ in
 
     services.borgbackup.jobs.${config.networking.hostName} = {
       paths =
-        (lib.optional ha.enable "/var/lib/hass") ++ (lib.optional z2m.enable "/var/lib/zigbee2mqtt");
+        (lib.optional ha.enable "/var/lib/hass")
+        ++ (lib.optional z2m.enable "/var/lib/zigbee2mqtt")
+        ++ (lib.optional pihole.enable "/etc/pihole")
+        ++ (lib.optional pihole.enable "/var/lib/pihole");
 
       repo = cfg.repo;
       doInit = true;
@@ -72,12 +76,14 @@ in
       # while HA is writing to it.
       preHook =
         (lib.optionalString ha.enable "systemctl stop home-assistant.service\n")
-        + (lib.optionalString z2m.enable "systemctl stop zigbee2mqtt.service\n");
+        + (lib.optionalString z2m.enable "systemctl stop zigbee2mqtt.service\n")
+        + (lib.optionalString pihole.enable "systemctl stop pihole-ftl.service\n");
 
       # Use || true so a failure to start one service does not
       # prevent the other from being attempted.
       postHook =
-        (lib.optionalString z2m.enable "systemctl start zigbee2mqtt.service || true\n")
+        (lib.optionalString pihole.enable "systemctl start pihole-ftl.service || true\n")
+        + (lib.optionalString z2m.enable "systemctl start zigbee2mqtt.service || true\n")
         + (lib.optionalString ha.enable "systemctl start home-assistant.service || true\n");
 
       persistentTimer = true;

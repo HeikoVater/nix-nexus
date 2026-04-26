@@ -55,6 +55,7 @@ modules/nixos/            System service modules (one file per service).
   impermanence.nix        Declares which state survives reboots.
   secrets.nix             sops-nix secret declarations.
   caddy.nix               Reverse proxy.
+  pihole.nix              DNS filtering and local DNS.
   home-assistant.nix      Smart home automation.
   mosquitto.nix           MQTT broker.
   zigbee2mqtt.nix         Zigbee bridge.
@@ -140,9 +141,10 @@ Every NixOS service module follows the same pattern:
 
 1. **Option declaration** under `homelab.<service>.enable` using `lib.mkEnableOption`.
 2. **Conditional config** wrapped in `lib.mkIf cfg.enable`.
-3. **Caddy awareness** -- modules with a web UI use `lib.mkMerge` with two branches:
-   - `lib.mkIf config.homelab.caddy.enable` -- binds to localhost, registers Caddy virtualHost.
-   - `lib.mkIf (!config.homelab.caddy.enable)` -- opens its own firewall port, binds to `0.0.0.0`.
+3. **Web UI proxying** -- modules with a browser UI bind to localhost and always
+   register a `services.caddy.virtualHosts."<name>.${config.homelab.domain}"`
+   entry. The shared `caddy.nix` module enables Caddy automatically when at
+   least one virtualHost exists.
 
 See `modules/nixos/example.nix` for the full template.
 
@@ -203,7 +205,7 @@ User secrets (for sops-menu) live in `secrets/users/<username>.yaml`. See
 ### Add a new NixOS service module
 
 1. Create `modules/nixos/<service>.nix` following the existing pattern
-   (option + mkIf + Caddy awareness if it has a web UI).
+   (option + mkIf + localhost binding/Caddy virtualHost if it has a web UI).
    See `modules/nixos/example.nix`.
 2. Add the import to `modules/nixos/default.nix`.
 3. Add the toggle `homelab.<service>.enable = true;` in the host's `default.nix`.

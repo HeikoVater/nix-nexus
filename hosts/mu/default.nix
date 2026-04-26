@@ -6,6 +6,10 @@
   ...
 }:
 
+let
+  hostIPv4 = "192.168.188.30";
+  routerIPv4 = "192.168.188.1";
+in
 {
   imports = [
     ./hardware-configuration.nix
@@ -30,19 +34,19 @@
   # ═══════════════════════════════════════════════════════════════════
   #  Flip any of these to false to cleanly disable a service.
   #  Dependencies are validated automatically (e.g. Zigbee2MQTT
-  #  requires Mosquitto). Caddy-awareness is built in — disabling
-  #  Caddy makes services open their own firewall ports; enabling it
-  #  binds them to localhost and registers reverse proxy routes.
+  #  requires Mosquitto). Browser-facing services always bind to
+  #  localhost and register Caddy routes automatically.
   # ─────────────────────────────────────────────────────────────────
   homelab = {
-    caddy.enable = false;
+    hostIPv4 = hostIPv4;
+    pihole.enable = true;
     home-assistant.enable = false;
     mosquitto.enable = false;
     zigbee2mqtt.enable = false;
     backups.enable = false;
     auto-upgrade.enable = false;
-    nh.enable = false;
-    coolercontrol.enable = false;
+    nh.enable = true;
+    coolercontrol.enable = true;
   };
 
   # ─── Basic System ──────────────────────────────────────────────
@@ -55,29 +59,21 @@
   ];
 
   # ─── Networking ────────────────────────────────────────────────
-  networking.useDHCP = true;
+  networking = {
+    useDHCP = false;
 
-  # ── Static IP (uncomment when ready, set useDHCP to false) ───
-  # systemd.network = {
-  #   enable = true;
-  #   networks."10-lan" = {
-  #     matchConfig.Name = "en*"; # adjust to your NIC name if needed
-  #     address = [ "192.168.188.2/24" ];
-  #     gateway = [ "192.168.188.1" ]; # Fritz!Box
-  #     dns = [ "192.168.188.1" ];
-  #     # ── Pi-hole DNS migration ──────────────────────────────────
-  #     # When you add Pi-hole to this server:
-  #     # 1. Change dns above to [ "127.0.0.1" ] so this server uses
-  #     #    its own Pi-hole for resolution.
-  #     # 2. Configure Pi-hole's upstream DNS to an external resolver
-  #     #    (e.g. 1.1.1.1, 9.9.9.9) — NOT back to the Fritz!Box,
-  #     #    or you'll create a resolution loop.
-  #     # 3. In the Fritz!Box admin (Home Network > Network > Network
-  #     #    Settings > IPv4 > Local DNS server), set the DNS server
-  #     #    to 192.168.188.2 so all LAN clients use Pi-hole.
-  #     # 4. Alternatively, set DNS per-device or via DHCP options.
-  #   };
-  # };
+    # Keep host-side DNS on the router even though Pi-hole serves LAN clients.
+    nameservers = [ routerIPv4 ];
+  };
+
+  systemd.network = {
+    enable = true;
+    networks."10-lan" = {
+      matchConfig.Name = "en*"; # adjust to your NIC name if needed
+      address = [ "${hostIPv4}/24" ];
+      gateway = [ routerIPv4 ];
+    };
+  };
 
   # ─── SSH ───────────────────────────────────────────────────────
   services.openssh = {
@@ -101,9 +97,9 @@
   };
 
   # ─── Firewall ──────────────────────────────────────────────────
-  # Base firewall — only SSH is always open. Service-specific ports
-  # (80/443 for Caddy, or 8123/8080 when Caddy is off) are opened
-  # automatically by each module.
+  # Base firewall — only SSH is always open. HTTP/HTTPS are opened
+  # automatically when any web UI module registers a Caddy route, and
+  # Pi-hole opens DNS on 53/tcp+udp when enabled.
   networking.firewall = {
     enable = true;
     allowedTCPPorts = [ 22 ];
