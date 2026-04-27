@@ -11,6 +11,7 @@
     ./auto-upgrade.nix
     ./nh.nix
     ./coolercontrol.nix
+    ./homepage-dashboard.nix
   ];
 
   # Root is tmpfs, so user accounts need to be recreated from declarative

@@ -39,6 +39,7 @@
     backups.enable = false;
     auto-upgrade.enable = false;
     nh.enable = false;
+    homepage-dashboard.enable = false;
   };
 
   # ─── Basic System ──────────────────────────────────────────────
@@ -58,6 +59,8 @@
     };
   };
 
+  # The shared modules set users.mutableUsers = false, so declare at
+  # least one real user before first deploy or you'll lock yourself out.
   # users.users.example = {
   #   isNormalUser = true;
   #   extraGroups = [ "wheel" ];
@@ -67,7 +70,9 @@
   #   ];
   # };
 
-  security.sudo.wheelNeedsPassword = false;
+  # Optional for single-user lab boxes. Leave this commented unless you
+  # explicitly want passwordless sudo for wheel.
+  # security.sudo.wheelNeedsPassword = false;
 
   # ─── Firewall ──────────────────────────────────────────────────
   networking.firewall = {

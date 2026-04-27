@@ -7,6 +7,9 @@
 
 let
   cfg = config.homelab.zigbee2mqtt;
+  dataDir = config.services.zigbee2mqtt.dataDir;
+  mqttSecretFile = "/run/zigbee2mqtt/secret.yaml";
+  mqttSecretLink = "${dataDir}/secret.yaml";
 in
 {
   options.homelab.zigbee2mqtt.enable = lib.mkEnableOption "Zigbee2MQTT";
@@ -41,8 +44,9 @@ in
         mqtt = {
           server = "mqtt://localhost:1883";
           user = "zigbee2mqtt";
-          # Password is injected by the preStart script below;
-          # do NOT set it here (it would end up in the Nix store).
+          # Keep the password out of persisted configuration.yaml.
+          # Zigbee2MQTT resolves this from secret.yaml in the data dir.
+          password = "!secret.yaml password";
         };
 
         serial = {
@@ -72,13 +76,22 @@ in
       '';
     };
 
-    # Inject the MQTT password into Z2M's config file before startup.
-    # The NixOS module generates the base config; this patches in the
-    # secret without putting it in the Nix store.
+    systemd.services.zigbee2mqtt.serviceConfig = {
+      RuntimeDirectory = "zigbee2mqtt";
+      RuntimeDirectoryMode = "0700";
+    };
+
+    # Generate a runtime-only secret file and point Zigbee2MQTT at it.
+    # This keeps the plaintext MQTT password out of the persisted data dir.
     systemd.services.zigbee2mqtt.preStart = lib.mkAfter ''
-      PASSWORD=$(cat ${config.sops.secrets.mqtt_password_zigbee2mqtt.path})
-      ${pkgs.yq-go}/bin/yq -i ".mqtt.password = \"$PASSWORD\"" \
-        /var/lib/zigbee2mqtt/configuration.yaml
+      set -eu
+
+      export PASSWORD=$(cat ${lib.escapeShellArg config.sops.secrets.mqtt_password_zigbee2mqtt.path})
+      umask 077
+
+      ${pkgs.yq-go}/bin/yq -n '.password = strenv(PASSWORD)' > ${lib.escapeShellArg mqttSecretFile}
+      ln -sfn ${lib.escapeShellArg mqttSecretFile} ${lib.escapeShellArg mqttSecretLink}
+      unset PASSWORD
     '';
 
     # Zigbee2MQTT needs dialout for serial access

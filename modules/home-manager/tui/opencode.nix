@@ -63,7 +63,7 @@ in
             # nix
             "nix fmt" = "allow";
             "nix eval*" = "allow";
-            "nix flake check" = "allow";
+            "nix flake check *" = "allow";
             "nixos-rebuild*" = "deny";
             "nh os*" = "deny";
 

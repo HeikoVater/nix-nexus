@@ -31,6 +31,7 @@
         };
         mqtt_password_zigbee2mqtt = {
           owner = "zigbee2mqtt";
+          restartUnits = lib.optional config.homelab.zigbee2mqtt.enable "zigbee2mqtt.service";
         };
       })
 

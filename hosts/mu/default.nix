@@ -47,6 +47,7 @@ in
     auto-upgrade.enable = false;
     nh.enable = true;
     coolercontrol.enable = true;
+    homepage-dashboard.enable = true;
   };
 
   # ─── Basic System ──────────────────────────────────────────────
@@ -106,17 +107,6 @@ in
   };
 
   # ─── Persistence ───────────────────────────────────────────────
-  # Persist heikov's .ssh dir (impermanence tracks it within home).
-  # The full home directory is bind-mounted below.
-  environment.persistence."/persist".users.heikov = {
-    directories = [
-      {
-        directory = ".ssh";
-        mode = "0700";
-      }
-    ];
-  };
-
   # Bind-mount the entire home from /persist so shell history,
   # config files, and working data survive reboots.
   fileSystems."/home/heikov" = {
