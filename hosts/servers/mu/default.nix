@@ -50,12 +50,18 @@ in
   homelab = {
     hostIPv4 = hostIPv4;
     pihole.enable = true;
-    home-assistant.enable = false;
-    mosquitto.enable = false;
-    zigbee2mqtt.enable = false;
     backups.enable = false;
     coolercontrol.enable = true;
     homepage-dashboard.enable = true;
+
+    home-assistant.enable = false;
+    mosquitto.enable = false;
+    zigbee2mqtt.enable = false;
+    paperless = {
+      enable = true;
+      consumptionDirIsPublic = true;
+    };
+    immich.enable = true;
   };
 
   # ─── Basic System ──────────────────────────────────────────────

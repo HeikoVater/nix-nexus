@@ -230,7 +230,6 @@ sudo ssh-keygen -A -f /mnt
 
 This creates the workstation's SSH server identity under `/mnt/etc/ssh/` so
 activation does not fail with missing host key errors.
-
 ---
 
 ## Step 12: Install NixOS

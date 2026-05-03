@@ -55,6 +55,20 @@ let
       name = "CoolerControl";
       siteMonitor = "http://127.0.0.1:11987/";
     };
+    paperless = {
+      description = "Document archive";
+      group = "Other Services";
+      icon = "mdi-file-document-multiple-outline";
+      name = "Paperless";
+      siteMonitor = "http://127.0.0.1:28981/";
+    };
+    immich = {
+      description = "Photo and video library";
+      group = "Other Services";
+      icon = "mdi-image-multiple-outline";
+      name = "Immich";
+      siteMonitor = "http://127.0.0.1:2283/";
+    };
   };
 
   groupSpecs = [
@@ -810,6 +824,8 @@ in
       labelOverrides = lib.mkOption {
         type = with lib.types; attrsOf str;
         default = {
+          "/tank/safe/immich" = "Immich";
+          "/tank/safe/paperless" = "Paperless";
           "/nix" = "Nix Store";
           "/persist" = "Persist";
           "/var/lib/postgresql" = "PostgreSQL";

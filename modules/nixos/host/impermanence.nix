@@ -21,6 +21,8 @@ let
   cc = config.homelab.coolercontrol;
   caddy = config.services.caddy.enable;
   pihole = config.homelab.pihole;
+  paperless = config.homelab.paperless;
+  immich = config.homelab.immich;
 in
 {
   options.host.impermanence = {
@@ -46,6 +48,8 @@ in
       ++ (lib.optional z2m.enable "/var/lib/zigbee2mqtt")
       ++ (lib.optional mqtt.enable "/var/lib/mosquitto")
       ++ (lib.optional cc.enable "/etc/coolercontrol")
+      ++ (lib.optional paperless.enable paperless.dataDir)
+      ++ (lib.optional immich.enable "/var/lib/immich")
       ++ (lib.optionals caddy [
         {
           directory = "/var/lib/caddy";

@@ -58,6 +58,15 @@
 
   # ─── ZFS Maintenance ─────────────────────────────────────────
   services.zfs = {
+    autoSnapshot = {
+      enable = true;
+      flags = "-k -p --utc";
+      frequent = 0;
+      hourly = 168;
+      daily = 30;
+      weekly = 0;
+      monthly = 12;
+    };
     autoScrub = {
       enable = true;
       interval = "monthly";

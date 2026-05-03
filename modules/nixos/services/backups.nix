@@ -1,6 +1,7 @@
 {
   config,
   lib,
+  pkgs,
   ...
 }:
 
@@ -9,6 +10,17 @@ let
   ha = config.homelab.home-assistant;
   z2m = config.homelab.zigbee2mqtt;
   pihole = config.homelab.pihole;
+  paperless = config.homelab.paperless;
+  immich = config.homelab.immich;
+  needsPostgresDump = paperless.enable || immich.enable;
+  postgresDumpDir = "/var/backup/postgresql";
+  postgresPackage = config.services.postgresql.package;
+  gzip = lib.getExe pkgs.gzip;
+  install = lib.getExe' pkgs.coreutils "install";
+  rm = lib.getExe' pkgs.coreutils "rm";
+  runuser = lib.getExe' pkgs.util-linux "runuser";
+  pgDump = lib.getExe' postgresPackage "pg_dump";
+  pgDumpAll = lib.getExe' postgresPackage "pg_dumpall";
 in
 {
   options.homelab.backups = {
@@ -49,7 +61,12 @@ in
         (lib.optional ha.enable "/var/lib/hass")
         ++ (lib.optional z2m.enable "/var/lib/zigbee2mqtt")
         ++ (lib.optional pihole.enable "/etc/pihole")
-        ++ (lib.optional pihole.enable "/var/lib/pihole");
+        ++ (lib.optional pihole.enable "/var/lib/pihole")
+        ++ (lib.optional paperless.enable (toString paperless.storageRoot))
+        ++ (lib.optional paperless.enable paperless.dataDir)
+        ++ (lib.optional immich.enable (toString immich.mediaLocation))
+        ++ (lib.optional immich.enable "/var/lib/immich")
+        ++ (lib.optional needsPostgresDump postgresDumpDir);
 
       repo = cfg.repo;
       doInit = true;
@@ -77,7 +94,19 @@ in
       preHook =
         (lib.optionalString ha.enable "systemctl stop home-assistant.service\n")
         + (lib.optionalString z2m.enable "systemctl stop zigbee2mqtt.service\n")
-        + (lib.optionalString pihole.enable "systemctl stop pihole-ftl.service\n");
+        + (lib.optionalString pihole.enable "systemctl stop pihole-ftl.service\n")
+        + (lib.optionalString needsPostgresDump ''
+          ${install} -d -m 0700 ${lib.escapeShellArg postgresDumpDir}
+          ${rm} -rf ${lib.escapeShellArg postgresDumpDir}
+          ${install} -d -m 0700 ${lib.escapeShellArg postgresDumpDir}
+          ${runuser} -u postgres -- ${pgDumpAll} --globals-only | ${gzip} -9 > ${lib.escapeShellArg "${postgresDumpDir}/globals.sql.gz"}
+        '')
+        + (lib.optionalString paperless.enable ''
+          ${runuser} -u postgres -- ${pgDump} --clean --if-exists --create --dbname=paperless | ${gzip} -9 > ${lib.escapeShellArg "${postgresDumpDir}/paperless.sql.gz"}
+        '')
+        + (lib.optionalString immich.enable ''
+          ${runuser} -u postgres -- ${pgDump} --clean --if-exists --create --dbname=${lib.escapeShellArg config.services.immich.database.name} | ${gzip} -9 > ${lib.escapeShellArg "${postgresDumpDir}/immich.sql.gz"}
+        '');
 
       # Use || true so a failure to start one service does not
       # prevent the other from being attempted.

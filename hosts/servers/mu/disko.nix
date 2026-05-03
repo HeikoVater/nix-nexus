@@ -157,6 +157,10 @@
               # Full data checksums matter more for databases than
               # the small CPU cost.
               compression = "zstd";
+              # Pair logical pg_dump backups with short-term ZFS file
+              # history so accidental local changes can be undone
+              # quickly without waiting on Borg restores.
+              "com.sun:auto-snapshot" = "true";
             };
           };
         };
@@ -207,6 +211,30 @@
               compression = "zstd";
               recordsize = "128K";
               secondarycache = "all";
+            };
+          };
+
+          # Paperless archive and inbox. Split into a child dataset so
+          # snapshots and future replication can target documents
+          # without pulling in the rest of /tank/safe.
+          "safe/paperless" = {
+            type = "zfs_fs";
+            mountpoint = "/tank/safe/paperless";
+            options = {
+              mountpoint = "legacy";
+              "com.sun:auto-snapshot" = "true";
+            };
+          };
+
+          # Immich originals, thumbnails, and derived media live here.
+          # Keeping it in its own dataset gives photos and videos the
+          # same snapshot boundary as the database-backed apps.
+          "safe/immich" = {
+            type = "zfs_fs";
+            mountpoint = "/tank/safe/immich";
+            options = {
+              mountpoint = "legacy";
+              "com.sun:auto-snapshot" = "true";
             };
           };
 

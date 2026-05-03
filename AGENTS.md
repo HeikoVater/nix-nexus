@@ -65,6 +65,17 @@ hosts/wsl/                WSL host family.
   example/                Example WSL host.
   wanzl/                  Current WSL host.
 
+hosts/workstations/       Desktop/laptop host family.
+  common.nix              Shared workstation defaults.
+  example/                Example workstation host.
+  desktop/                Desktop host.
+  laptop/                 Laptop host.
+
+hosts/wsl/                WSL host family.
+  common.nix              Shared WSL defaults.
+  example/                Example WSL host.
+  wanzl/                  Current WSL host.
+
 home/common.nix           Repo-wide Home Manager policy shared by all users.
 home/<username>/          Per-user Home Manager configuration.
   base.nix                Identity, locale, and per-user shared config.
