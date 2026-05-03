@@ -1,12 +1,66 @@
 {
   config,
   lib,
+  osConfig ? null,
   pkgs,
   ...
 }:
 
 let
   cfg = config.user.tui.nvf;
+  userName = config.home.username;
+  hostName = lib.attrByPath [ "networking" "hostName" ] null osConfig;
+
+  nixdSettings = {
+    nixpkgs.expr = ''
+      if builtins.pathExists ./flake.nix then
+        let
+          flake = builtins.getFlake (builtins.toString ./.);
+        in
+        if flake ? inputs && flake.inputs ? nixpkgs then
+          import flake.inputs.nixpkgs { }
+        else
+          import <nixpkgs> { }
+      else
+        import <nixpkgs> { }
+    '';
+
+    formatting.command = [ "nixfmt" ];
+  }
+  // lib.optionalAttrs (hostName != null) {
+    options = {
+      nixos.expr = ''
+        if builtins.pathExists ./flake.nix then
+          let
+            flake = builtins.getFlake (builtins.toString ./.);
+          in
+          if flake ? nixosConfigurations && builtins.hasAttr "${hostName}" flake.nixosConfigurations then
+            flake.nixosConfigurations."${hostName}".options
+          else
+            { }
+        else
+          { }
+      '';
+
+      "home-manager".expr = ''
+        if builtins.pathExists ./flake.nix then
+          let
+            flake = builtins.getFlake (builtins.toString ./.);
+          in
+          if flake ? nixosConfigurations
+            && builtins.hasAttr "${hostName}" flake.nixosConfigurations
+            && flake.nixosConfigurations."${hostName}" ? nixdOptions
+            && flake.nixosConfigurations."${hostName}".nixdOptions ? homeManager
+            && builtins.hasAttr "${userName}" flake.nixosConfigurations."${hostName}".nixdOptions.homeManager
+          then
+            flake.nixosConfigurations."${hostName}".nixdOptions.homeManager."${userName}"
+          else
+            { }
+        else
+          { }
+      '';
+    };
+  };
 in
 {
   options.user.tui.nvf = {
@@ -167,13 +221,20 @@ in
             fold = true;
           };
 
-          lsp.enable = true;
+          lsp = {
+            enable = true;
+
+            # Point nixd at the current host's flake outputs so option
+            # completion matches the system and Home Manager user editing it.
+            servers.nixd.settings.nixd = nixdSettings;
+          };
 
           languages = {
             enableTreesitter = true;
 
             nix = {
               enable = true;
+              lsp.servers = [ "nixd" ];
               format = {
                 enable = true;
                 type = [ "nixfmt" ];

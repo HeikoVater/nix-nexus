@@ -1,7 +1,13 @@
-# Example NixOS service module.
-# Copy this to modules/nixos/<service>.nix, add to modules/nixos/default.nix,
-# and enable in hosts/<hostname>/default.nix with:
-#   homelab.<service>.enable = true;
+# Example NixOS module.
+# Copy this to one of:
+#   modules/nixos/host/<name>.nix
+#   modules/nixos/services/<name>.nix
+#   modules/nixos/workstation/<name>.nix
+# Then add it to that directory's default.nix and adjust the option path to
+# match the bucket you chose:
+#   host.<name>.enable = true;
+#   homelab.<name>.enable = true;
+#   workstation.<name>.enable = true;
 {
   config,
   lib,

@@ -17,7 +17,11 @@ let
       coreutils
     ];
     text = ''
-      # fzf password finder for sops-encrypted YAML secrets (headless)
+      # fzf password finder for sops-encrypted YAML secrets.
+      #
+      # This repo uses it for `secrets/users/<username>.yaml`. `sops-menu`
+      # decrypts the file on demand via `sops -d`, so the user must have
+      # their SSH key available locally or through a forwarded agent.
       set -euo pipefail
 
       SECRETS_FILE="''${SOPS_SECRETS_FILE:-}"
@@ -64,8 +68,12 @@ let
           exit 1
       fi
 
-      yaml=$(sops -d "$SECRETS_FILE") || {
-          echo "sops-menu: Failed to decrypt secrets" >&2
+      load_yaml() {
+          sops -d "$SECRETS_FILE"
+      }
+
+      yaml=$(load_yaml) || {
+          echo "sops-menu: Failed to load secrets" >&2
           exit 1
       }
 
@@ -132,10 +140,21 @@ in
     enable = lib.mkEnableOption "sops-menu password finder";
 
     secretsFile = lib.mkOption {
-      type = lib.types.str;
-      default = "";
-      example = "/path/to/secrets/users/heikov.yaml";
-      description = "Path to the sops-encrypted YAML file for sops-menu.";
+      type = lib.types.nullOr (
+        lib.types.oneOf [
+          lib.types.path
+          lib.types.str
+        ]
+      );
+      default = null;
+      example = "../../secrets/users/heikov.yaml";
+      description = ''
+        Path to the YAML file used by sops-menu.
+
+        In this repo, it normally points at an encrypted
+        `secrets/users/<username>.yaml` file that the user decrypts on demand
+        with `sops` and their SSH key/agent.
+      '';
     };
   };
 
@@ -145,9 +164,9 @@ in
         home.packages = [ sops-menu ];
       }
 
-      (lib.mkIf (cfg.secretsFile != "") {
+      (lib.mkIf (cfg.secretsFile != null) {
         home.sessionVariables = {
-          SOPS_SECRETS_FILE = cfg.secretsFile;
+          SOPS_SECRETS_FILE = toString cfg.secretsFile;
         };
       })
     ]

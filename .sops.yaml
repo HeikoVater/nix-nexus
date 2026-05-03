@@ -2,6 +2,8 @@
 keys:
   # hosts (age)
   - &mu age1hc2gmf9e0ewfjss446qengyqjymq5e6mysga62ml6zxyf0qeyyaq2t2wnw
+  - &desktop age1eynfl80cvjg8a8ngs0g0qtql9gmjzqalssx4eyuflefpxmn7hpas7ka37g
+  - &laptop age1hhyelvrawx046n4ewrgx0stkhqxsqzy9zavderpqa7ql9y3ghq9qcntwpv
   # users (ssh)
   - &heikov ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIP3lk60aE5mZZPwCMEDOxcAIJjLfdUDbuPR4slUWnBuj heikov
 creation_rules:
@@ -9,4 +11,19 @@ creation_rules:
     key_groups:
       - age:
           - *mu
+          - *heikov
+  - path_regex: secrets/hosts/desktop\.yaml$
+    key_groups:
+      - age:
+          - *desktop
+          - *heikov
+  - path_regex: secrets/hosts/laptop\.yaml$
+    key_groups:
+      - age:
+          - *laptop
+          - *heikov
+  - path_regex: secrets/users/heikov\.yaml$
+    key_groups:
+      - age:
+          # User secrets stay user-decrypted: no host age keys here.
           - *heikov

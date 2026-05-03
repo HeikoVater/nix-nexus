@@ -1,20 +1,13 @@
+{ lib, ... }:
+
 {
   imports = [
-    ./secrets.nix
-    ./impermanence.nix
-    ./caddy.nix
-    ./pihole.nix
-    ./mosquitto.nix
-    ./home-assistant.nix
-    ./zigbee2mqtt.nix
-    ./backups.nix
-    ./auto-upgrade.nix
-    ./nh.nix
-    ./coolercontrol.nix
-    ./homepage-dashboard.nix
+    ./host
+    ./services
+    ./workstation
   ];
 
-  # Root is tmpfs, so user accounts need to be recreated from declarative
-  # config on every activation instead of preserving mutable shadow state.
-  users.mutableUsers = false;
+  # Prefer declarative users by default across the repo. `hosts/wsl/wanzl`
+  # is the current exception because it intentionally avoids secrets.
+  users.mutableUsers = lib.mkDefault false;
 }

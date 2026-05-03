@@ -1,9 +1,9 @@
 # nix-nexus
 
-Declarative multi-host NixOS configuration for home servers. The entire system
--- services, networking, users, secrets, disk layout -- is defined as a Nix
-flake with impermanent root (tmpfs) and ZFS storage. Changes go through PRs
-with CI validation, and servers auto-deploy from `main`.
+Declarative multi-host NixOS configuration for home servers, workstations, and
+WSL. The entire system -- services, networking, users, secrets, disk layout,
+and Home Manager profiles -- is defined as a Nix flake. Changes go through PRs
+with CI validation, and each host rebuilds declaratively from the repo.
 
 ## Repository Structure
 
@@ -12,33 +12,40 @@ with CI validation, and servers auto-deploy from `main`.
 ├── flake.nix                           # Flake entry point, all inputs and host definitions
 ├── .envrc                              # Direnv -- activates devShell, installs pre-commit hooks
 ├── .github/workflows/ci.yml           # CI -- runs on every PR to main
+├── SERVER_SETUP.md                     # Server installation guide
+├── WORKSTATION_SETUP.md                # Workstation installation guide
 ├── hosts/
-│   ├── mu/                             # Per-host configuration
-│   │   ├── default.nix                 # Service toggles, networking, users
-│   │   ├── hardware-configuration.nix  # Boot, kernel, storage
-│   │   └── disko.nix                   # Declarative disk layout
-│   └── example/                        # Example host template
+│   ├── servers/
+│   │   ├── common.nix                  # Shared server defaults
+│   │   ├── example/                    # Example server host
+│   │   └── mu/                         # Current home server
+│   ├── workstations/
+│   │   ├── common.nix                  # Shared desktop/laptop defaults
+│   │   ├── example/                    # Example workstation host
+│   │   ├── desktop/                    # Desktop host
+│   │   └── laptop/                     # Laptop host
+│   └── wsl/
+│       ├── common.nix                  # Shared WSL defaults
+│       ├── example/                    # Example WSL host
+│       └── wanzl/                      # Current WSL host
 ├── home/
 │   ├── heikov/                         # Per-user Home Manager config
-│   │   └── default.nix                 # Module toggles, git, locale, packages
+│   │   ├── base.nix                    # Identity, locale, shared Stylix
+│   │   ├── headless.nix                # CLI/TUI profile
+│   │   └── workstation.nix             # GUI/desktop profile
 │   └── example/                        # Example user template
 ├── modules/
-│   ├── nixos/                          # System service modules (one per service)
-│   │   ├── impermanence.nix            # Persistent state declarations
-│   │   ├── secrets.nix                 # sops-nix secret declarations
-│   │   ├── caddy.nix                   # Reverse proxy
-│   │   ├── pihole.nix                  # DNS filtering + local DNS
-│   │   ├── home-assistant.nix          # Smart home automation
-│   │   ├── mosquitto.nix               # MQTT broker
-│   │   ├── zigbee2mqtt.nix             # Zigbee bridge
-│   │   ├── backups.nix                 # BorgBackup
-│   │   ├── auto-upgrade.nix            # Daily flake rebuild from GitHub
-│   │   ├── nh.nix                      # Nix helper / garbage collection
-│   │   ├── coolercontrol.nix           # Fan management
+│   ├── nixos/                          # NixOS module tree
+│   │   ├── host/                       # Host lifecycle and persistence modules
+│   │   ├── services/                   # Homelab and always-on services
+│   │   ├── workstation/                # Desktop/laptop system features
 │   │   └── example.nix                 # Example module template
 │   └── home-manager/                   # User environment modules
 │       ├── cli/                        # CLI tools (zsh, tmux, starship, etc.)
-│       └── tui/                        # TUI tools (nvf, opencode, yazi, etc.)
+│       ├── tui/                        # TUI tools (nvf, opencode, yazi, etc.)
+│       ├── gui/                        # Graphical applications
+│       ├── desktop/                    # Desktop/session configuration
+│       └── example.nix                 # Example Home Manager module
 └── secrets/
     ├── hosts/<hostname>.yaml           # Encrypted host secrets (sops + age)
     ├── users/<username>.yaml           # Encrypted user secrets (sops-menu)
@@ -60,11 +67,17 @@ cd nix-nexus
 direnv allow    # installs pre-commit hooks via devShell
 ```
 
+Installation guides:
+- `SERVER_SETUP.md` for `hosts/servers/*`
+- `WORKSTATION_SETUP.md` for `hosts/workstations/*`
+
 ### Configuration
 
-System services are toggled per-host in `hosts/<hostname>/default.nix`:
+System features are toggled per-host in `hosts/<family>/<hostname>/default.nix`:
 
 ```nix
+host.auto-upgrade.enable = true;
+
 homelab = {
   hostIPv4 = "192.168.188.2";
   # Optional override; defaults to "<hostname>.lan"
@@ -74,11 +87,11 @@ homelab = {
   mosquitto.enable = true;
   zigbee2mqtt.enable = true;
   backups.enable = true;
-  auto-upgrade.enable = true;
 };
 ```
 
-User-level tools are toggled per-user in `home/<username>/default.nix`:
+User-level tools are toggled per-user in `home/<username>/headless.nix` or
+`home/<username>/workstation.nix`:
 
 ```nix
 user = {
@@ -149,19 +162,30 @@ nixos-rebuild switch --flake github:<org>/<repo>
 
 ## Secrets Management
 
-Secrets are encrypted at rest with [sops-nix](https://github.com/Mic92/sops-nix)
-using age keys, decrypted to `/run/secrets/<name>` at activation time.
-User password hashes also stay in sops and are made available early enough
-during boot for declarative user creation.
+The repo uses two secret flows on purpose:
+
+1. **Host secrets** such as password hashes, NAS credentials, MQTT passwords,
+   and API keys.
+   These are encrypted for the host age key, decrypted by
+   [sops-nix](https://github.com/Mic92/sops-nix), and exposed under
+   `/run/secrets/<name>` at activation time.
+2. **User secrets** for `sops-menu`.
+   These live in `secrets/users/<username>.yaml`, stay encrypted in the repo,
+   and are normally decrypted on demand by the user with `sops` plus their SSH
+   key or forwarded SSH agent.
+
+That split keeps boot-time host secrets automated while still letting user
+secrets remain tied to the user's own SSH identity.
 
 ```sh
 sops secrets/hosts/<hostname>.yaml       # edit host secrets
 sops secrets/users/<username>.yaml       # edit user secrets (sops-menu)
 ```
 
-The age key must be present on the server at
-`/persist/var/lib/sops-nix/key.txt` before the first deploy. It needs to be
-reachable during early boot, before users are recreated.
+Servers with impermanence keep the age key at
+`/persist/var/lib/sops-nix/key.txt` so it is available before declarative
+users are recreated. Workstations use `/root/.config/sops/age/keys.txt` for
+host secrets only; `sops-menu` still uses the user's SSH key.
 See `.sops.yaml` for encryption key configuration and `secrets/*/example.yaml`
 for file format reference.
 
@@ -171,12 +195,13 @@ See [AGENTS.md](AGENTS.md) for detailed instructions on:
 - Adding a new host
 - Adding a new user
 - Adding NixOS service modules
-- Adding Home Manager modules (CLI/TUI)
+- Adding Home Manager modules
 - Adding secrets
 
-Example templates are provided in `hosts/example/`, `home/example/`,
-`modules/nixos/example.nix`, `modules/home-manager/cli/example.nix`,
-`modules/home-manager/tui/example.nix`, and `secrets/*/example.yaml`.
+Example templates are provided in `hosts/servers/example/`,
+`hosts/workstations/example/`, `hosts/wsl/example/`, `home/example/`,
+`modules/nixos/example.nix`, `modules/home-manager/example.nix`, and
+`secrets/*/example.yaml`.
 
 ## License
 
