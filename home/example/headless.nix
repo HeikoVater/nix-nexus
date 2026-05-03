@@ -15,7 +15,6 @@
       packages.enable = true;
       shell.enable = true;
       zsh.enable = true;
-      tmux.enable = true;
       starship.enable = true;
       direnv.enable = true;
       fastfetch.enable = true;
@@ -30,6 +29,8 @@
 
     tui = {
       packages.enable = true;
+      tmux.enable = true;
+      lazygit.enable = true;
       nvf.enable = true;
       opencode.enable = true;
       yazi.enable = true;

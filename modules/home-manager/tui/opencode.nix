@@ -7,6 +7,7 @@
 
 let
   cfg = config.user.tui.opencode;
+  smallModel = "openai/gpt-5.4-mini";
 in
 {
   options.user.tui.opencode = {
@@ -29,7 +30,7 @@ in
           "openai"
         ];
 
-        small_model = "openai/gpt-5.4-mini";
+        small_model = smallModel;
 
         provider.openai.options.setCacheKey = true;
 
@@ -40,7 +41,33 @@ in
           };
           build = {
             model = "openai/gpt-5.4";
-            variant = "medium";
+            variant = "xhigh";
+          };
+        };
+
+        command = {
+          "commit-subject" = {
+            description = "Suggest a Git commit subject";
+            agent = "build";
+            model = smallModel;
+            template = ''
+              Staged diff stat:
+              !`git diff --cached --stat`
+
+              Staged diff:
+              !`git diff --cached`
+
+              Write exactly one Git commit subject line for the currently staged changes.
+              Do NOT output anything else!
+
+              Requirements:
+              - Use imperative mood.
+              - Focus on the intent of the change, not a file-by-file summary.
+              - Do not end with a period.
+              - Prefer 50-60 characters and never exceed 72 characters.
+              - Use a prefix like fix:, feat:, refactor:, docs:, test:, or chore: only when it clearly fits.
+              - Output only the subject line.
+            '';
           };
         };
 
@@ -61,9 +88,10 @@ in
             "*" = "ask";
 
             # nix
-            "nix fmt" = "allow";
+            "nix fmt*" = "allow";
             "nix eval*" = "allow";
-            "nix flake check *" = "allow";
+            "nix flake check*" = "allow";
+            "nix flake show*" = "allow";
             "nixos-rebuild*" = "deny";
             "nh os*" = "deny";
 
@@ -104,6 +132,7 @@ in
             "git filter-repo*" = "deny";
             "git gc*" = "deny";
             "git prune*" = "deny";
+
           };
           skill = "ask";
           webfetch = "allow";

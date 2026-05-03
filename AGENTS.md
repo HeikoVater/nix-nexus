@@ -79,8 +79,8 @@ modules/nixos/            NixOS module tree.
   example.nix             Example NixOS module for reference.
 
 modules/home-manager/     User environment modules.
-  cli/                    Command-line tools (zsh, tmux, starship, etc.).
-  tui/                    Terminal UI tools (nvf, opencode, yazi, etc.).
+  cli/                    Command-line tools (zsh, starship, etc.).
+  tui/                    Terminal UI tools (tmux, nvf, opencode, yazi, etc.).
   gui/                    Graphical applications (kitty, mpv, librewolf, etc.).
   desktop/                Desktop/session configuration (Hyprland, Waybar, etc.).
   example.nix             Example Home Manager module for reference.
@@ -178,9 +178,9 @@ Home Manager modules are split into `cli/`, `tui/`, `gui/`, and `desktop/`
 subdirectories:
 
 - **CLI** (`modules/home-manager/cli/`): Command-line tools -- shells, prompts,
-  aliases, simple utilities.
-- **TUI** (`modules/home-manager/tui/`): Terminal UI applications -- editors,
-  file managers, AI assistants.
+  aliases, simple utilities, and CLIs.
+- **TUI** (`modules/home-manager/tui/`): Terminal UI applications -- multiplexers,
+  editors, file managers, AI assistants.
 - **GUI** (`modules/home-manager/gui/`): Graphical applications -- terminal
   emulators, browsers, media tools, launchers.
 - **Desktop** (`modules/home-manager/desktop/`): Desktop session setup -- window

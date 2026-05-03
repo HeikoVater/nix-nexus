@@ -3,7 +3,6 @@
     ./packages.nix
     ./shell.nix
     ./zsh.nix
-    ./tmux.nix
     ./direnv.nix
     ./fastfetch.nix
     ./starship.nix

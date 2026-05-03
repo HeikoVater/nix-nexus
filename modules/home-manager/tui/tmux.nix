@@ -6,10 +6,10 @@
 }:
 
 let
-  cfg = config.user.cli.tmux;
+  cfg = config.user.tui.tmux;
 in
 {
-  options.user.cli.tmux = {
+  options.user.tui.tmux = {
     enable = lib.mkEnableOption "tmux";
   };
 
@@ -206,6 +206,12 @@ in
             -d "#{pane_current_path}" \
             -w 80% \
             -h 80% \
+            -E "lazygit"
+
+          bind -n ${mainMod}-G display-popup \
+            -d "#{pane_current_path}" \
+            -w 100% \
+            -h 100% \
             -E "lazygit"
 
           # opencode popup

@@ -41,8 +41,8 @@ with CI validation, and each host rebuilds declaratively from the repo.
 │   │   ├── workstation/                # Desktop/laptop system features
 │   │   └── example.nix                 # Example module template
 │   └── home-manager/                   # User environment modules
-│       ├── cli/                        # CLI tools (zsh, tmux, starship, etc.)
-│       ├── tui/                        # TUI tools (nvf, opencode, yazi, etc.)
+│       ├── cli/                        # CLI tools (zsh, starship, etc.)
+│       ├── tui/                        # TUI tools (tmux, nvf, opencode, yazi, etc.)
 │       ├── gui/                        # Graphical applications
 │       ├── desktop/                    # Desktop/session configuration
 │       └── example.nix                 # Example Home Manager module
@@ -98,11 +98,11 @@ user = {
   cli = {
     packages.enable = true;
     zsh.enable = true;
-    tmux.enable = true;
     starship.enable = true;
     # ...
   };
   tui = {
+    tmux.enable = true;
     nvf.enable = true;
     opencode.enable = true;
     yazi.enable = true;
