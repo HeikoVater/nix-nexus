@@ -48,7 +48,14 @@ in
       ++ (lib.optional z2m.enable "/var/lib/zigbee2mqtt")
       ++ (lib.optional mqtt.enable "/var/lib/mosquitto")
       ++ (lib.optional cc.enable "/etc/coolercontrol")
-      ++ (lib.optional paperless.enable paperless.dataDir)
+      ++ (lib.optionals paperless.enable [
+        {
+          directory = paperless.dataDir;
+          user = "paperless";
+          group = "paperless";
+          mode = "0755";
+        }
+      ])
       ++ (lib.optional immich.enable "/var/lib/immich")
       ++ (lib.optionals caddy [
         {

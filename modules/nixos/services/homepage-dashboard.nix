@@ -11,6 +11,7 @@ let
   hasZfs = config.boot.supportedFilesystems.zfs or false;
 
   homepageHost = "homepage.${config.homelab.domain}";
+  trustHost = "trust.${config.homelab.domain}";
   homepagePort = config.services.homepage-dashboard.listenPort;
   homepagePortString = toString homepagePort;
 
@@ -22,9 +23,59 @@ let
 
   proxiedHosts = lib.pipe config.services.caddy.virtualHosts [
     builtins.attrNames
-    (builtins.filter (host: lib.hasSuffix domainSuffix host && host != homepageHost))
+    (builtins.filter (
+      host: lib.hasSuffix domainSuffix host && host != homepageHost && !(lib.hasInfix "://" host)
+    ))
     lib.unique
   ];
+
+  trustDocs = pkgs.writeTextDir "trust/index.html" ''
+    <!doctype html>
+    <html lang="en">
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>Trust the local Caddy CA</title>
+        <style>
+          body {
+            font-family: system-ui, sans-serif;
+            line-height: 1.5;
+            margin: 2rem auto;
+            max-width: 48rem;
+            padding: 0 1rem;
+          }
+
+          code {
+            background: #f3f4f6;
+            border-radius: 0.25rem;
+            padding: 0.1rem 0.3rem;
+          }
+        </style>
+      </head>
+      <body>
+        <h1>Trust the local Caddy CA</h1>
+        <p>
+          Install this certificate once on each device that should trust
+          <code>*.${config.homelab.domain}</code>.
+        </p>
+        <ol>
+          <li><a href="/root.crt">Download the root certificate</a>.</li>
+          <li>Import it into your device's trusted root certificate store.</li>
+          <li>Reopen your browser and visit <a href="https://${homepageHost}">https://${homepageHost}</a>.</li>
+        </ol>
+        <p>Quick hints:</p>
+        <ul>
+          <li><strong>NixOS:</strong> add the PEM file to <code>security.pki.certificateFiles</code>.</li>
+          <li><strong>Windows:</strong> import it into <code>Trusted Root Certification Authorities</code>.</li>
+          <li><strong>Apple devices:</strong> install the certificate profile and mark it trusted.</li>
+          <li><strong>Firefox:</strong> it may use its own trust store unless configured to use the OS store.</li>
+        </ul>
+        <p>
+          Server path: <code>/var/lib/caddy/.local/share/caddy/pki/authorities/local/root.crt</code>
+        </p>
+      </body>
+    </html>
+  '';
 
   serviceMetadata = {
     pihole = {
@@ -58,14 +109,14 @@ let
     paperless = {
       description = "Document archive";
       group = "Other Services";
-      icon = "mdi-file-document-multiple-outline";
+      icon = "paperless-ngx.png";
       name = "Paperless";
       siteMonitor = "http://127.0.0.1:28981/";
     };
     immich = {
       description = "Photo and video library";
       group = "Other Services";
-      icon = "mdi-image-multiple-outline";
+      icon = "immich.png";
       name = "Immich";
       siteMonitor = "http://127.0.0.1:2283/";
     };
@@ -606,7 +657,7 @@ let
         Homepage = {
           description = "Homelab dashboard";
           href = "https://${homepageHost}";
-          icon = "mdi-view-dashboard";
+          icon = "homepage.png";
           siteMonitor = "http://127.0.0.1:${homepagePortString}/";
         };
       };
@@ -743,6 +794,13 @@ let
     {
       Operations = [
         {
+          "Trust Local CA" = {
+            description = "Download the Caddy root certificate and install notes";
+            href = "http://${trustHost}";
+            icon = "mdi-certificate-outline";
+          };
+        }
+        {
           "Host Uptime" = {
             description = "Current uptime";
             icon = "mdi-timer-outline";
@@ -840,6 +898,10 @@ in
   };
 
   config = lib.mkIf cfg.enable {
+    services.pihole-ftl.settings.misc.dnsmasq_lines = lib.mkIf config.homelab.pihole.enable [
+      "address=/${trustHost}/${config.homelab.hostIPv4}"
+    ];
+
     systemd.tmpfiles.rules = [ "d ${homepageStatusRoot} 0755 root root -" ];
 
     systemd.services.homepage-dashboard-export-backup =
@@ -938,6 +1000,18 @@ in
       extraConfig = ''
         tls internal
         reverse_proxy localhost:${homepagePortString}
+      '';
+    };
+
+    services.caddy.virtualHosts."http://${trustHost}" = {
+      logFormat = null;
+      extraConfig = ''
+        root * ${trustDocs}/trust
+        handle /root.crt {
+          root * /var/lib/caddy/.local/share/caddy/pki/authorities/local
+          file_server
+        }
+        file_server
       '';
     };
 

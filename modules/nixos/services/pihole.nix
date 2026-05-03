@@ -12,7 +12,10 @@ let
   proxiedHosts = lib.pipe config.services.caddy.virtualHosts [
     builtins.attrNames
     (builtins.filter (
-      host: host != config.homelab.domain && lib.hasSuffix ".${config.homelab.domain}" host
+      host:
+      host != config.homelab.domain
+      && !(lib.hasInfix "://" host)
+      && lib.hasSuffix ".${config.homelab.domain}" host
     ))
     lib.unique
   ];
