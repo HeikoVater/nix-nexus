@@ -1,6 +1,4 @@
-{
-  ...
-}:
+{ lib, ... }:
 
 {
   # ─── Host Features ──────────────────────────────────────────────
@@ -14,6 +12,19 @@
   home-manager = {
     useGlobalPkgs = true;
     useUserPackages = true;
+    sharedModules = [
+      (
+        {
+          lib,
+          ...
+        }:
+        {
+          # Keep all server Home Manager profiles headless unless a specific
+          # user configuration overrides the profile kind explicitly.
+          user.profile.kind = lib.mkDefault "headless";
+        }
+      )
+    ];
   };
 
   # ─── Basic System ──────────────────────────────────────────────

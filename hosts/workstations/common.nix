@@ -1,6 +1,4 @@
-{
-  ...
-}:
+{ lib, ... }:
 
 {
   # ─── Host / Workstation Features ───────────────────────────────
@@ -19,6 +17,19 @@
   home-manager = {
     useGlobalPkgs = true;
     useUserPackages = true;
+    sharedModules = [
+      (
+        {
+          lib,
+          ...
+        }:
+        {
+          # Workstation Home Manager profiles opt into the graphical Stylix
+          # defaults through the shared profile kind.
+          user.profile.kind = lib.mkDefault "workstation";
+        }
+      )
+    ];
   };
 
   # ─── Basic System ──────────────────────────────────────────────

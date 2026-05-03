@@ -65,8 +65,9 @@ hosts/wsl/                WSL host family.
   example/                Example WSL host.
   wanzl/                  Current WSL host.
 
+home/common.nix           Repo-wide Home Manager policy shared by all users.
 home/<username>/          Per-user Home Manager configuration.
-  base.nix                Identity and locale shared by all profiles.
+  base.nix                Identity, locale, and per-user shared config.
   headless.nix            CLI/TUI profile for servers, WSL, or remote hosts.
   workstation.nix         GUI/desktop profile layered on top of headless.
 home/example/             Example user for reference.
@@ -190,6 +191,25 @@ Each module follows the pattern:
    `user.tui.<tool>.enable`, `user.gui.<tool>.enable`, or
    `user.desktop.<tool>.enable`.
 2. **Conditional config** wrapped in `lib.mkIf cfg.enable`.
+
+### Stylix on headless vs workstation profiles
+
+`home/common.nix` owns the repo-wide Home Manager policy for Stylix targets
+that emit `dconf.settings`. It gates the current set --
+`stylix.targets.gtk`, `stylix.targets.gnome`, `stylix.targets.eog`, and
+`stylix.targets."gnome-text-editor"` -- from `user.profile.kind`.
+
+Host-family common modules should set `user.profile.kind` through
+`home-manager.sharedModules`: `hosts/workstations/common.nix` uses
+`"workstation"`, while `hosts/servers/common.nix` and `hosts/wsl/common.nix`
+use `"headless"`. The fallback default in `home/common.nix` remains
+`"headless"`, which keeps standalone Home Manager profiles safe unless they
+explicitly override it. Browser-facing homelab web UIs do not use the server's
+local `dconf` state; they are themed by the client browser.
+
+If you add or re-enable Home Manager GUI theming that writes `dconf.settings`,
+make sure it only applies to graphical hosts or that the host also provides
+`programs.dconf.enable` on the NixOS side.
 
 See `modules/home-manager/example.nix`.
 

@@ -16,6 +16,9 @@ in
     ./workstation/pegasus.nix
   ];
 
+  # Workstation hosts set `user.profile.kind` through host-family
+  # `home-manager.sharedModules`, which re-enables the Stylix dconf targets.
+
   # ─── Module Toggles ─────────────────────────────────────────────
   user = {
     gui = {

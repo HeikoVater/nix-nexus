@@ -1,20 +1,17 @@
 {
-  homeModules,
   pkgs,
   ...
 }:
 
 {
   imports = [
-    homeModules
+    ../common.nix
   ];
 
   # ─── Home Manager Base ──────────────────────────────────────────
   home.username = "heikov";
   home.homeDirectory = "/home/heikov";
   home.stateVersion = "25.11";
-
-  programs.home-manager.enable = true;
 
   # ─── Shared Identity ────────────────────────────────────────────
   programs.git = {

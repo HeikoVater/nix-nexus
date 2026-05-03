@@ -20,6 +20,19 @@
   home-manager = {
     useGlobalPkgs = true;
     useUserPackages = true;
+    sharedModules = [
+      (
+        {
+          lib,
+          ...
+        }:
+        {
+          # WSL stays headless by default; graphical profiles would need to
+          # override the profile kind explicitly.
+          user.profile.kind = lib.mkDefault "headless";
+        }
+      )
+    ];
   };
 
   # ─── WSL Platform ───────────────────────────────────────────────

@@ -1,12 +1,13 @@
-{
-  pkgs,
-  ...
-}:
+{ pkgs, ... }:
 
 {
   imports = [
     ./base.nix
   ];
+
+  # `user.profile.kind` is normally supplied by the host-family Home Manager
+  # wiring. Standalone Home Manager falls back to the headless default from
+  # `home/common.nix`.
 
   # ─── Module Toggles ─────────────────────────────────────────────
   user = {
