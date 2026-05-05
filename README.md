@@ -111,6 +111,36 @@ user = {
 };
 ```
 
+### Backups
+
+When `homelab.backups.enable = true`, the host creates a local Borg repository
+under `/tank/backups/borg` and backs up state from whichever homelab services
+are enabled.
+
+The backup path list is derived automatically from service toggles. Today that
+includes:
+
+- `/var/lib/hass` for Home Assistant
+- `/var/lib/zigbee2mqtt` for Zigbee2MQTT
+- `/etc/pihole` and `/var/lib/pihole` for Pi-hole
+- `/etc/coolercontrol` for CoolerControl configuration
+- `homelab.paperless.storageRoot` and `homelab.paperless.dataDir` for Paperless
+- `homelab.immich.mediaLocation` and `/var/lib/immich` for Immich
+- `/var/backup/postgresql` for generated PostgreSQL dumps when PostgreSQL-backed services are enabled
+
+Archives are named `<hostname>-<timestamp>`. The timer runs daily at `03:00`,
+which stays ahead of the repo's default `04:00` auto-upgrade window on hosts
+that enable automatic upgrades.
+
+To verify a host backup manually after deployment:
+
+```sh
+sudo systemctl start borgbackup-job-<hostname>.service
+sudo journalctl -u borgbackup-job-<hostname>.service -f
+sudo borg-job-<hostname> list
+sudo borg-job-<hostname> list ::<hostname>-YYYY-MM-DDTHH:MM:SS
+```
+
 Setting any toggle to `false` cleanly disables it and adjusts dependents
 automatically (firewall rules, backup paths, Caddy routes, persisted state,
 secrets). Browser-facing services always publish Caddy virtual hosts and start

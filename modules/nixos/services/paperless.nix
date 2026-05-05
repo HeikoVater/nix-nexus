@@ -102,7 +102,6 @@ in
             ];
             serviceConfig = {
               Type = "oneshot";
-              RemainAfterExit = true;
             };
             script = ''
               ${installBin} -d -m 0755 ${lib.escapeShellArg serviceCfg.dataDir}

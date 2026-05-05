@@ -433,7 +433,8 @@ Trigger a manual run to confirm BorgBackup works:
 ```sh
 sudo systemctl start borgbackup-job-mu.service
 sudo journalctl -u borgbackup-job-mu.service -f
-sudo borg list /tank/backups/borg
+sudo borg-job-mu list
+sudo borg-job-mu list ::mu-YYYY-MM-DDTHH:MM:SS
 ```
 
 ---

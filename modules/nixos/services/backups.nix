@@ -10,6 +10,7 @@ let
   ha = config.homelab.home-assistant;
   z2m = config.homelab.zigbee2mqtt;
   pihole = config.homelab.pihole;
+  coolercontrol = config.homelab.coolercontrol;
   paperless = config.homelab.paperless;
   immich = config.homelab.immich;
   needsPostgresDump = paperless.enable || immich.enable;
@@ -21,6 +22,17 @@ let
   runuser = lib.getExe' pkgs.util-linux "runuser";
   pgDump = lib.getExe' postgresPackage "pg_dump";
   pgDumpAll = lib.getExe' postgresPackage "pg_dumpall";
+  backupPaths =
+    (lib.optional ha.enable "/var/lib/hass")
+    ++ (lib.optional z2m.enable "/var/lib/zigbee2mqtt")
+    ++ (lib.optional pihole.enable "/etc/pihole")
+    ++ (lib.optional pihole.enable "/var/lib/pihole")
+    ++ (lib.optional coolercontrol.enable "/etc/coolercontrol")
+    ++ (lib.optional paperless.enable (toString paperless.storageRoot))
+    ++ (lib.optional paperless.enable paperless.dataDir)
+    ++ (lib.optional immich.enable (toString immich.mediaLocation))
+    ++ (lib.optional immich.enable "/var/lib/immich")
+    ++ (lib.optional needsPostgresDump postgresDumpDir);
 in
 {
   options.homelab.backups = {
@@ -47,9 +59,9 @@ in
     #      /tank/backups (handled by disko).
     #   2. The borg repo is initialised automatically on first run.
     #
-    # Restore a file:
-    #   borg list ${cfg.repo}
-    #   borg extract ${cfg.repo}::ARCHIVE_NAME path/to/file
+    # Inspect archives on the host:
+    #   sudo borg-job-<hostname> list
+    #   sudo borg-job-<hostname> list ::<hostname>-YYYY-MM-DDTHH:MM:SS
     #
     # Note: local backups protect against software failures and
     # accidental deletion, but NOT against hardware failure of the
@@ -57,19 +69,12 @@ in
     # off-site (rsync to a remote server, rclone to cloud, etc.).
 
     services.borgbackup.jobs.${config.networking.hostName} = {
-      paths =
-        (lib.optional ha.enable "/var/lib/hass")
-        ++ (lib.optional z2m.enable "/var/lib/zigbee2mqtt")
-        ++ (lib.optional pihole.enable "/etc/pihole")
-        ++ (lib.optional pihole.enable "/var/lib/pihole")
-        ++ (lib.optional paperless.enable (toString paperless.storageRoot))
-        ++ (lib.optional paperless.enable paperless.dataDir)
-        ++ (lib.optional immich.enable (toString immich.mediaLocation))
-        ++ (lib.optional immich.enable "/var/lib/immich")
-        ++ (lib.optional needsPostgresDump postgresDumpDir);
+      paths = backupPaths;
 
       repo = cfg.repo;
       doInit = true;
+      archiveBaseName = config.networking.hostName;
+      readWritePaths = lib.optional needsPostgresDump postgresDumpDir;
 
       encryption = {
         mode = "repokey";
@@ -78,7 +83,9 @@ in
 
       compression = "auto,zstd";
 
-      # Run daily at 3:00 AM (before the auto-upgrade at 4:00 AM)
+      # Run daily at 03:00. On hosts that enable the repo's
+      # auto-upgrade module, this stays ahead of the default 04:00
+      # upgrade window.
       startAt = "03:00";
 
       # Retention: keep 7 daily, 4 weekly, 6 monthly
@@ -97,8 +104,11 @@ in
         + (lib.optionalString pihole.enable "systemctl stop pihole-ftl.service\n")
         + (lib.optionalString needsPostgresDump ''
           ${install} -d -m 0700 ${lib.escapeShellArg postgresDumpDir}
-          ${rm} -rf ${lib.escapeShellArg postgresDumpDir}
-          ${install} -d -m 0700 ${lib.escapeShellArg postgresDumpDir}
+          shopt -s nullglob dotglob
+          dumpEntries=(${lib.escapeShellArg postgresDumpDir}/*)
+          if [ ''${#dumpEntries[@]} -gt 0 ]; then
+            ${rm} -rf "''${dumpEntries[@]}"
+          fi
           ${runuser} -u postgres -- ${pgDumpAll} --globals-only | ${gzip} -9 > ${lib.escapeShellArg "${postgresDumpDir}/globals.sql.gz"}
         '')
         + (lib.optionalString paperless.enable ''
@@ -117,5 +127,7 @@ in
 
       persistentTimer = true;
     };
+
+    systemd.tmpfiles.rules = lib.optional needsPostgresDump "d ${postgresDumpDir} 0700 root root -";
   };
 }

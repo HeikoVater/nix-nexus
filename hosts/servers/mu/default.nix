@@ -50,7 +50,7 @@ in
   homelab = {
     hostIPv4 = hostIPv4;
     pihole.enable = true;
-    backups.enable = false;
+    backups.enable = true;
     coolercontrol.enable = true;
     homepage-dashboard.enable = true;
 
