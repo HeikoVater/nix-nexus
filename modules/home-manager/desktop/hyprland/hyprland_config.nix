@@ -143,7 +143,6 @@ in
           "$mainMod, Return, exec, ${config.home.sessionVariables.TERMINAL}"
           "$mainMod, D, exec, ${config.home.sessionVariables.DMENU}"
           "$mainMod, S, exec, ${config.home.sessionVariables.PMENU}"
-          "$shiftMod, S, exec, ${lib.getExe pkgs.foot} --app-id sops-menu -e sops-menu"
           "$mainMod, B, exec, ${config.home.sessionVariables.BROWSER}"
           "$mainMod, E, exec, ${config.home.sessionVariables.FILE_MANAGER}"
           "$mainMod, O, exec, ${config.home.sessionVariables.GUI_FILE_MANAGER}"

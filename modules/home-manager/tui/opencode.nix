@@ -83,7 +83,10 @@ in
         };
 
         permission = {
-          edit = "allow";
+          edit = {
+            "*" = "allow";
+            "/nix/store/**" = "deny";
+          };
           bash = {
             "*" = "ask";
 
@@ -137,7 +140,10 @@ in
           skill = "ask";
           webfetch = "allow";
           doom_loop = "ask";
-          external_directory = "ask";
+          external_directory = {
+            "*" = "ask";
+            "/nix/store/**" = "allow";
+          };
         };
       };
     };

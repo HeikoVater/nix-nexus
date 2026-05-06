@@ -71,7 +71,7 @@ in
     CALCULATOR = "kitty --app-id libqalculate -e libqalculate";
     BROWSER = "librewolf";
     DMENU = "wofi --show drun";
-    PMENU = "kitty --app-id sops-menu -e sops-menu";
+    PMENU = "sops-menu-popup kitty --app-id sops-menu";
     IMAGE_VIEWER = "swayimg";
     AUDIO_VIEWER = "mpv";
     VIDEO_VIEWER = "mpv";

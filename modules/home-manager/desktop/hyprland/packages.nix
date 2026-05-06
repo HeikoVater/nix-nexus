@@ -22,6 +22,7 @@ in
       mako
       libnotify
       wl-clipboard
+      wtype
       swww
       networkmanagerapplet
       pavucontrol
@@ -30,7 +31,6 @@ in
       slurp
       wf-recorder
       crypto-tracker
-      foot
       brightnessctl
       playerctl
     ];

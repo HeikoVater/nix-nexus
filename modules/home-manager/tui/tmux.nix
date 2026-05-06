@@ -214,6 +214,9 @@ in
             -h 100% \
             -E "lazygit"
 
+          # sops-menu popup
+          bind -n ${mainMod}-s run-shell -b 'pane_id=$(tmux display-message -p "#{pane_id}"); pane_path=$(tmux display-message -p "#{pane_current_path}"); tmux display-popup -d "$pane_path" -w 80% -h 80% -E "sops-menu --mode tmux --tmux-pane $pane_id"'
+
           # opencode popup
           bind -n ${mainMod}-o display-popup -E -w 90% -h 90% -d '#{pane_current_path}' opencode
 
