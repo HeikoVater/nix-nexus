@@ -11,7 +11,12 @@
 #  Adding a new service? If it stores state under /var/lib/<name>,
 #  add it to the conditional directories block below.
 # ─────────────────────────────────────────────────────────────────
-{ config, lib, ... }:
+{
+  config,
+  lib,
+  utils,
+  ...
+}:
 
 let
   cfg = config.host.impermanence;
@@ -23,6 +28,55 @@ let
   pihole = config.homelab.pihole;
   paperless = config.homelab.paperless;
   immich = config.homelab.immich;
+  persistedDirectories = [
+    "/var/log" # systemd journal and service logs
+    "/var/lib/nixos" # NixOS state (uid/gid map, etc.)
+    "/var/lib/systemd/coredump" # crash dumps for debugging
+    "/var/lib/systemd/timers" # persistent timer state (backup/upgrade schedules)
+    "/var/lib/sops-nix" # age decryption key — CRITICAL for secrets
+    "/etc/zfs" # ZFS cache files (avoids "device busy" on atomic updates)
+  ]
+  # ─── Service State (conditional) ──────────────────────────
+  # Only persist directories for services that are enabled.
+  ++ (lib.optional ha.enable "/var/lib/hass")
+  ++ (lib.optional z2m.enable "/var/lib/zigbee2mqtt")
+  ++ (lib.optional mqtt.enable "/var/lib/mosquitto")
+  ++ (lib.optional cc.enable "/etc/coolercontrol")
+  ++ (lib.optionals paperless.enable [
+    {
+      directory = paperless.dataDir;
+      user = "paperless";
+      group = "paperless";
+      mode = "0755";
+    }
+  ])
+  ++ (lib.optional immich.enable "/var/lib/immich")
+  ++ (lib.optionals caddy [
+    {
+      directory = "/var/lib/caddy";
+      user = "caddy";
+      group = "caddy";
+      mode = "0700";
+    }
+  ])
+  ++ (lib.optionals pihole.enable [
+    {
+      directory = "/etc/pihole";
+      user = "pihole";
+      group = "pihole";
+      mode = "0700";
+    }
+    {
+      directory = "/var/lib/pihole";
+      user = "pihole";
+      group = "pihole";
+      mode = "0700";
+    }
+  ]);
+  persistedDirectoryPath = entry: if lib.isString entry then entry else entry.directory;
+  persistedDirectoryMountUnits = lib.unique (
+    map (entry: "${utils.escapeSystemdPath (persistedDirectoryPath entry)}.mount") persistedDirectories
+  );
 in
 {
   options.host.impermanence = {
@@ -34,56 +88,27 @@ in
       hideMounts = true;
 
       # ─── System State ───────────────────────────────────────────
-      directories = [
-        "/var/log" # systemd journal and service logs
-        "/var/lib/nixos" # NixOS state (uid/gid map, etc.)
-        "/var/lib/systemd/coredump" # crash dumps for debugging
-        "/var/lib/systemd/timers" # persistent timer state (backup/upgrade schedules)
-        "/var/lib/sops-nix" # age decryption key — CRITICAL for secrets
-        "/etc/zfs" # ZFS cache files (avoids "device busy" on atomic updates)
-      ]
-      # ─── Service State (conditional) ──────────────────────────
-      # Only persist directories for services that are enabled.
-      ++ (lib.optional ha.enable "/var/lib/hass")
-      ++ (lib.optional z2m.enable "/var/lib/zigbee2mqtt")
-      ++ (lib.optional mqtt.enable "/var/lib/mosquitto")
-      ++ (lib.optional cc.enable "/etc/coolercontrol")
-      ++ (lib.optionals paperless.enable [
-        {
-          directory = paperless.dataDir;
-          user = "paperless";
-          group = "paperless";
-          mode = "0755";
-        }
-      ])
-      ++ (lib.optional immich.enable "/var/lib/immich")
-      ++ (lib.optionals caddy [
-        {
-          directory = "/var/lib/caddy";
-          user = "caddy";
-          group = "caddy";
-          mode = "0700";
-        }
-      ])
-      ++ (lib.optionals pihole.enable [
-        {
-          directory = "/etc/pihole";
-          user = "pihole";
-          group = "pihole";
-          mode = "0700";
-        }
-        {
-          directory = "/var/lib/pihole";
-          user = "pihole";
-          group = "pihole";
-          mode = "0700";
-        }
-      ]);
+      directories = persistedDirectories;
 
       # ─── System Files ───────────────────────────────────────────
       files = [
         "/etc/machine-id" # stable machine identity for systemd/journal
       ];
+    };
+
+    # During boot and switch, tmpfiles must run after all impermanence bind
+    # mounts are active or it may create state on tmpfs that is then hidden by
+    # the later mount.
+    systemd.services = {
+      systemd-tmpfiles-setup = {
+        after = lib.mkAfter persistedDirectoryMountUnits;
+        requires = persistedDirectoryMountUnits;
+      };
+
+      systemd-tmpfiles-resetup = {
+        after = lib.mkAfter persistedDirectoryMountUnits;
+        requires = persistedDirectoryMountUnits;
+      };
     };
 
     # ─── SSH Host Keys ──────────────────────────────────────────

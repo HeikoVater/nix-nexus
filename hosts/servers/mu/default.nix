@@ -84,10 +84,6 @@ in
     };
   };
 
-  security.pki.certificateFiles = [
-    ../../../certs/root.crt # caddy certificate
-  ];
-
   # ─── User Account ───────────────────────────────────────────────
   users.users.heikov = {
     isNormalUser = true;
