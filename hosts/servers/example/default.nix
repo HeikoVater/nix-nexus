@@ -4,6 +4,7 @@
 #
 # Replace all occurrences of "example" with your hostname/username.
 {
+  hostname,
   ...
 }:
 
@@ -17,7 +18,18 @@
   # ═══════════════════════════════════════════════════════════════════
   #  Home Manager
   # ═══════════════════════════════════════════════════════════════════
-  # home-manager.users.example = import ../../../home/example/headless.nix;
+  # home-manager.users.example =
+  #   {
+  #     ...
+  #   }:
+  #   {
+  #     imports = [ ../../../home/example/headless.nix ];
+  #
+  #     user.cli.sops-menu = {
+  #       enable = true;
+  #       secretsFile = ../../../secrets/users/example.yaml;
+  #     };
+  #   };
 
   # ═══════════════════════════════════════════════════════════════════
   #  Host Features
@@ -41,7 +53,7 @@
   };
 
   # ─── Basic System ──────────────────────────────────────────────
-  networking.hostName = "example";
+  networking.hostName = hostname;
 
   # ─── Networking ────────────────────────────────────────────────
   networking.useDHCP = true;
@@ -60,6 +72,9 @@
   # Optional for single-user lab boxes. Leave this commented unless you
   # explicitly want passwordless sudo for wheel.
   # security.sudo.wheelNeedsPassword = false;
+
+  # sops.defaultSopsFile = ../../../secrets/hosts/example.yaml;
+  # sops.secrets.example_password_hash.neededForUsers = true;
 
   system.stateVersion = "25.11";
 }

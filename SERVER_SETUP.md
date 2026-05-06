@@ -4,13 +4,15 @@ Step-by-step installation of a new host from a graphical NixOS live USB.
 Everything happens on the server itself -- no separate workstation needed for
 the initial install. Changes are then pushed as a PR from your workstation.
 
-This guide uses `mu` and `heikov` as concrete examples throughout. Replace
-them with your actual hostname and username where indicated.
-
 This guide is specifically for server hosts under `hosts/servers/`. Workstation
 and WSL hosts share the same repo structure, but they do not follow the
 Disko/ZFS/impermanence-specific install flow below. For workstation hosts, use
 `WORKSTATION_SETUP.md` instead.
+
+This guide assumes the repo already contains `hosts/servers/<hostname>/` and
+any host-specific files needed for the machine you are installing. For a brand
+new host, start from `hosts/servers/example/` and adapt it first, or copy a
+similar existing host if you want to reuse its Disko/ZFS layout.
 
 ## What You Need
 
@@ -18,12 +20,12 @@ Two USB drives plugged into the server:
 
 1. **Installer USB** -- Graphical NixOS 25.11 ISO (GNOME or Plasma), booted.
    Download from https://nixos.org/download (select the graphical live ISO).
-
 2. **Data USB** -- containing:
-    - A clone of this repository
-    - The `heikov` SSH private key (`id_ed25519`) -- needed to edit sops files
-    - The host's age key (`key.txt`) and its public key -- needed for host
-      secrets at boot
+   - A clone of this repository
+   - Your SSH private key (`id_ed25519`) -- needed to edit sops files and later
+     decrypt `sops-menu` user secrets
+   - The host's age key (`key.txt`) and its public key -- needed for host
+     secrets at boot
 
 **Internet required** (Ethernet cable connected to your router).
 
@@ -35,11 +37,13 @@ Boot from the installer USB (enter BIOS, set USB as first boot device). Once
 the graphical desktop loads, open a terminal.
 
 Verify internet connectivity:
+
 ```sh
 ping -c 3 1.1.1.1
 ```
 
 Enable flakes for the live session:
+
 ```sh
 export NIX_CONFIG="experimental-features = nix-command flakes"
 ```
@@ -75,10 +79,10 @@ USB=/tmp/usb
 ## Step 3: Copy Files from the Data USB
 
 ```sh
-cp -r $USB/nix-nexus /tmp/nix-nexus
-cp $USB/key.txt /tmp/host-age-key.txt
+cp -r "$USB/nix-nexus" /tmp/nix-nexus
+cp "$USB/key.txt" /tmp/host-age-key.txt
 mkdir -p ~/.ssh
-cp $USB/id_ed25519 ~/.ssh/id_ed25519
+cp "$USB/id_ed25519" ~/.ssh/id_ed25519
 chmod 600 ~/.ssh/id_ed25519
 ```
 
@@ -89,7 +93,7 @@ Adjust source paths to match your USB layout.
 ## Step 4: Enter a Tool Shell
 
 ```sh
-nix-shell -p sops age mkpasswd
+nix-shell -p sops age mkpasswd git
 export NIX_CONFIG="experimental-features = nix-command flakes"
 export EDITOR=vim
 ```
@@ -98,7 +102,36 @@ Stay in this shell for all remaining steps.
 
 ---
 
-## Step 5: Identify Disk IDs
+## Step 5: Prepare the Host Config and Identify Disk IDs
+
+If the host directory does not exist yet, create it from the example template:
+
+```sh
+cp -r /tmp/nix-nexus/hosts/servers/example \
+  /tmp/nix-nexus/hosts/servers/<hostname>
+```
+
+Then update at least:
+
+1. `hosts/servers/<hostname>/default.nix`
+2. `hosts/servers/<hostname>/hardware-configuration.nix`
+3. `flake.nix` -- add the host under `nixosConfigurations`
+4. `secrets/hosts/<hostname>.yaml` if the host uses `sops-nix`
+5. `hosts/servers/<hostname>/disko.nix` if the host uses Disko
+
+At minimum, make sure the host config sets:
+
+- `networking.hostName = hostname;`
+- a declarative wheel user plus matching `home-manager.users.<username>`
+- `sops.defaultSopsFile = ../../../secrets/hosts/<hostname>.yaml;`
+- `sops.secrets.<username>_password_hash.neededForUsers = true;`
+
+This repo does not ship a one-size-fits-all server `disko.nix` because disk
+counts, pool layouts, and mount strategy vary by host. If you want a
+declarative Disko layout, copy a similar host's `disko.nix` first and then
+adapt its device paths and pool layout to this machine.
+
+Identify the real disk IDs for the target machine:
 
 ```sh
 ls -l /dev/disk/by-id/ | grep -v part
@@ -112,50 +145,48 @@ Note the base IDs (without the `-partN` suffix) for each disk:
 | HDD 1 | `ata-ST12000VN0008-2YS101_XXXX...` |
 | HDD 2 | same model, different serial |
 
----
+If the host uses Disko, update the
+`device = "/dev/disk/by-id/...";` entries in
+`hosts/servers/<hostname>/disko.nix` to match the IDs from this machine. If
+you copied a `disko.nix` from another host, replace all of its existing disk
+IDs before running Disko.
 
-## Step 6: Edit Disk IDs in disko.nix
-
-```sh
-vim /tmp/nix-nexus/hosts/servers/mu/disko.nix
-```
-
-Replace the three placeholders with the disk IDs from step 5:
-
-| Placeholder | Replace with |
-|---|---|
-| `PLACEHOLDER_SSD` | NVMe SSD disk ID |
-| `PLACEHOLDER_HDD1` | First HDD disk ID |
-| `PLACEHOLDER_HDD2` | Second HDD disk ID |
-
-Save and exit (`:wq`).
+The remaining steps assume a Disko-based ZFS install with persisted state under
+`/persist`.
 
 ---
 
-## Step 7: Generate User Password Hash
+## Step 6: Generate User Password Hash
 
 ```sh
 mkpasswd -m sha-512
 ```
 
-Enter the desired password for the `heikov` user when prompted. Copy the
+Enter the desired password for the `<username>` user when prompted. Copy the
 output hash (starts with `$6$...`). This is used for console login and
 persists across reboots via sops.
 
 ---
 
-## Step 8: Edit Secrets
+## Step 7: Edit Secrets
+
+If the host secrets file does not exist yet:
 
 ```sh
-sops /tmp/nix-nexus/secrets/hosts/mu.yaml
+cp /tmp/nix-nexus/secrets/hosts/example.yaml \
+  /tmp/nix-nexus/secrets/hosts/<hostname>.yaml
+```
+
+```sh
+sops /tmp/nix-nexus/secrets/hosts/<hostname>.yaml
 ```
 
 sops decrypts using `~/.ssh/id_ed25519` directly -- no key conversion needed.
 
-Set the user password and verify all service secrets have real values:
+Set the user password and verify all enabled service secrets have real values:
 
 ```yaml
-heikov_password_hash: "$6$rounds=..."
+<username>_password_hash: "$6$rounds=..."
 mqtt_password_homeassistant: "..."
 mqtt_password_zigbee2mqtt: "..."
 borg_passphrase: "..."
@@ -163,12 +194,12 @@ borg_passphrase: "..."
 
 Save and exit. sops re-encrypts automatically.
 
-`secrets/users/heikov.yaml` is separate from this: it stays encrypted to the
-user's SSH key for `sops-menu` and is not needed during boot.
+`secrets/users/<username>.yaml` is separate from this: it stays encrypted to
+the user's SSH key for `sops-menu` and is not needed during boot.
 
 ---
 
-## Step 9: Lock the Flake
+## Step 8: Lock the Flake
 
 ```sh
 cd /tmp/nix-nexus
@@ -182,49 +213,51 @@ git add flake.lock
 
 ---
 
-## Step 10: Set the ZFS Host ID
+## Step 9: Set the ZFS Host ID
 
 ZFS embeds the host ID when creating pools. It must match
-`networking.hostId` in `hardware-configuration.nix` (value `163dd8b3`), or
-pools will not import after reboot.
+`networking.hostId` in your host config, or pools will not import after reboot.
 
-The live ISO has a read-only `/etc`. Write to it with an overlay:
+Read the configured value from the flake and write it into the live ISO:
 
 ```sh
+HOST_ID=$(nix eval "/tmp/nix-nexus#nixosConfigurations.<hostname>.config.networking.hostId" --raw)
 sudo rm /etc/hostid
-sudo zgenhostid 163dd8b3
+sudo zgenhostid "$HOST_ID"
 ```
 
 Verify:
+
 ```sh
-hostid    # should print 163dd8b3
+hostid    # should print the configured hostId
 ```
 
 ---
 
-## Step 11: Partition Disks with Disko
+## Step 10: Partition Disks with Disko
 
-**WARNING: This destroys all data on the NVMe SSD and both HDDs.**
+**WARNING: This destroys all data on the disks referenced by
+`hosts/servers/<hostname>/disko.nix`.**
 
 ```sh
 sudo nix run github:nix-community/disko -- \
   --mode destroy,format,mount \
-  /tmp/nix-nexus/hosts/servers/mu/disko.nix
+  /tmp/nix-nexus/hosts/servers/<hostname>/disko.nix
 ```
 
-This partitions the NVMe (ESP, swap, L2ARC, rpool) and both HDDs, creates
-ZFS pools `rpool` and `tank`, and mounts everything under `/mnt`.
+This partitions the target disks, creates the declared filesystems and ZFS
+pools, and mounts everything under `/mnt`.
 
 Verify:
+
 ```sh
 mount | grep /mnt
-sudo zpool status rpool    # single SSD vdev, ONLINE
-sudo zpool status tank     # mirror of 2 HDDs + cache, ONLINE
+sudo zpool status
 ```
 
 ---
 
-## Step 12: Place the Age Key
+## Step 11: Place the Age Key
 
 ```sh
 sudo mkdir -p /mnt/persist/var/lib/sops-nix
@@ -238,7 +271,7 @@ because it must be available early during boot.
 
 ---
 
-## Step 13: Generate SSH Host Keys
+## Step 12: Generate SSH Host Keys
 
 ```sh
 sudo mkdir -p /mnt/persist/etc/ssh
@@ -255,40 +288,40 @@ SSH fingerprint.
 
 ---
 
-## Step 14: Create User Home Directory
+## Step 13: Create User Home Directory
 
 ```sh
-sudo mkdir -p /mnt/persist/home/heikov/.ssh
-sudo chmod 700 /mnt/persist/home/heikov/.ssh
+sudo mkdir -p /mnt/persist/home/<username>/.ssh
+sudo chmod 700 /mnt/persist/home/<username>/.ssh
 ```
 
 Repeat for each user defined on this host.
 
 ---
 
-## Step 15: Install NixOS
+## Step 14: Install NixOS
 
 ```sh
 sudo nixos-install \
-  --flake /tmp/nix-nexus#mu \
+  --flake /tmp/nix-nexus#<hostname> \
   --no-root-passwd
 ```
 
 `--no-root-passwd` is safe because root login is disabled in the config.
-The `heikov` user's login password is managed by host secrets in sops.
+The `<username>` user's login password is managed by host secrets in sops.
 
 This builds the full system closure -- expect a while on first run.
 
 ---
 
-## Step 16: Save Changes and Push a PR
+## Step 15: Save Changes and Push a PR
 
 The modified repo in `/tmp/nix-nexus` lives only in the live environment's
 RAM and will be lost on reboot. Copy it back to the data USB:
 
 ```sh
-sudo cp -r /tmp/nix-nexus $USB/nix-nexus-configured
-sudo umount $USB
+sudo cp -r /tmp/nix-nexus "$USB/nix-nexus-configured"
+sudo umount "$USB"
 ```
 
 From your workstation, create a branch and open a PR:
@@ -297,12 +330,12 @@ From your workstation, create a branch and open a PR:
 cp -r /path/to/usb/nix-nexus-configured ./nix-nexus
 cd nix-nexus
 
-git checkout -b setup/mu
+git checkout -b setup/<hostname>
 
-git add hosts/servers/mu/disko.nix flake.lock
-git commit -m "configure mu: disk IDs and flake lock"
+git add hosts/servers/<hostname> flake.nix flake.lock secrets/hosts/<hostname>.yaml
+git commit -m "add <hostname> server configuration"
 
-git push -u origin setup/mu
+git push -u origin setup/<hostname>
 # Open a PR on GitHub. CI will validate the config.
 # Once CI passes, merge to main. The server will auto-upgrade at 04:00.
 ```
@@ -312,44 +345,45 @@ git push -u origin setup/mu
 
 ---
 
-## Step 17: Reboot
+## Step 16: Reboot
 
 ```sh
 sudo reboot
 ```
 
-Remove the installer USB during reboot (or set the NVMe as first boot device
-in BIOS beforehand).
+Remove the installer USB during reboot (or set the boot disk as first boot
+device in BIOS beforehand).
 
 ---
 
-## Step 18: Verify
+## Step 17: Verify
 
-`mu` is configured with the static IPv4 address `192.168.188.30` in
-`hosts/servers/mu/default.nix`. If you changed `homelab.hostIPv4`, use that
-address instead.
+If the host sets `homelab.hostIPv4`, use that address. Otherwise use the IP
+address shown on the console or assigned by DHCP.
 
 SSH in:
+
 ```sh
-ssh heikov@<server-ip>
+ssh <username>@<server-ip>
 ```
 
 Run checks:
+
 ```sh
 # System identity
-hostnamectl                           # should show "mu"
+hostnamectl                           # should show "<hostname>"
 df -h /                               # tmpfs, ~4 GB
 
 # ZFS
-zpool status                          # rpool and tank both ONLINE
+zpool status                          # pools ONLINE
 
 # Persistent state
 ls /persist/var/lib/sops-nix/key.txt  # age key present
 ls /persist/etc/ssh/                  # SSH host keys present
-ls /persist/home/heikov/              # user home exists
+ls /persist/home/<username>/          # user home exists
 
 # Secrets decrypted at runtime
-sudo ls /run/secrets/                 # mqtt_*, borg_passphrase (when enabled)
+sudo ls /run/secrets/                 # service secrets (when enabled)
 
 # Optional: user secrets for sops-menu
 # These are decrypted on demand with the user's SSH key, not the host age key.
@@ -357,13 +391,13 @@ sudo ls /run/secrets/                 # mqtt_*, borg_passphrase (when enabled)
 # sops-menu
 
 # Services (adjust based on which are enabled)
-systemctl status caddy               # when any web UI is enabled
+systemctl status caddy                # when any web UI is enabled
 systemctl status home-assistant
 systemctl status mosquitto
 systemctl status zigbee2mqtt
 
 # Network
-ip addr show                          # static LAN address on the server NIC
+ip addr show                          # expected LAN address on the server NIC
 
 # Hardware monitoring
 sudo dmesg | grep nct6775             # fan controller detected
@@ -372,74 +406,80 @@ sensors                               # temp and fan readings
 
 ---
 
-## Step 19: Network DNS
+## Step 18: Network DNS
 
-`mu` is configured with the static IPv4 address `192.168.188.30` via
-`homelab.hostIPv4` in `hosts/servers/mu/default.nix`.
-
-Browser-facing services are always served through Caddy over HTTPS, so clients
-need to resolve their `*.mu.lan` hostnames to the server's IP.
+Browser-facing services are always served through Caddy over HTTPS. If you use
+the default `homelab.domain`, clients need to resolve `*.<hostname>.lan`
+hostnames to the server's IP. If you override `homelab.domain`, substitute
+that custom domain in the examples below.
 
 **Quick option** -- add to `/etc/hosts` on each client:
-```
-<server-ip>  mu.lan
-<server-ip>  hass.mu.lan
-<server-ip>  z2m.mu.lan
-<server-ip>  coolercontrol.mu.lan
+
+```text
+<server-ip>  <hostname>.lan
+<server-ip>  hass.<hostname>.lan
+<server-ip>  z2m.<hostname>.lan
+<server-ip>  coolercontrol.<hostname>.lan
 ```
 
 **Better option** -- configure a local DNS server (Pi-hole, Unbound, etc.)
-with records for `mu.lan` and the service subdomains you expose through Caddy.
+with records for `<hostname>.lan` and the service subdomains you expose through
+Caddy.
 
-If `homelab.pihole.enable = true`, Pi-hole will serve `mu.lan` plus Caddy-backed
-service aliases like `hass.mu.lan`, `z2m.mu.lan`, `coolercontrol.mu.lan`, and
-`pihole.mu.lan` automatically. Point your router's LAN DNS server setting at
-the server IP so clients actually query Pi-hole.
+If `homelab.pihole.enable = true`, Pi-hole will serve `<hostname>.lan` plus
+Caddy-backed service aliases like `hass.<hostname>.lan`, `z2m.<hostname>.lan`,
+`coolercontrol.<hostname>.lan`, and `pihole.<hostname>.lan` automatically.
+Point your router's LAN DNS server setting at the server IP so clients
+actually query Pi-hole.
 
 ---
 
-## Step 20: Configure Services
+## Step 19: Configure Services
 
 ### Home Assistant
 
-1. Open `https://hass.mu.lan` (accept the self-signed cert)
+1. Open `https://hass.<hostname>.lan` (accept the self-signed cert)
 2. Complete the onboarding wizard
 3. Add MQTT: Settings > Devices & Services > Add Integration > MQTT
-   - Broker: `localhost`, Port: `1883`
-   - Username: `homeassistant`
-   - Password: the `mqtt_password_homeassistant` value from secrets
+   Broker: `localhost`, Port: `1883`
+   Username: `homeassistant`
+   Password: the `mqtt_password_homeassistant` value from secrets
 
 ### Zigbee2MQTT
 
-1. Open `https://z2m.mu.lan`
+1. Open `https://z2m.<hostname>.lan`
 2. The Sonoff adapter should appear at `/dev/zigbee`
 3. Click "Permit Join" to pair devices (auto-discover in Home Assistant via MQTT)
 
 ### Pi-hole
 
-1. Open `https://pihole.mu.lan`
+1. Open `https://pihole.<hostname>.lan`
 2. Point your router's LAN DNS server at the server IP so clients use Pi-hole
 3. Store the dashboard password hash in the `pihole_web_password_hash` secret
 
 ### CoolerControl
 
-1. Open `https://coolercontrol.mu.lan`
+1. Open `https://coolercontrol.<hostname>.lan`
 2. Configure fan curves using nct6775 sensor readings
 3. Cross-reference with `sensors` output
 
 ### Backups
 
 Trigger a manual run to confirm BorgBackup works:
+
 ```sh
-sudo systemctl start borgbackup-job-mu.service
-sudo journalctl -u borgbackup-job-mu.service -f
-sudo borg-job-mu list
-sudo borg-job-mu list ::mu-YYYY-MM-DDTHH:MM:SS
+sudo systemctl start borgbackup-job-<hostname>.service
+sudo journalctl -u borgbackup-job-<hostname>.service -f
+sudo borg-job-<hostname> list
+sudo borg-job-<hostname> list ::<hostname>-YYYY-MM-DDTHH:MM:SS
 ```
+
+After the first successful archive, test at least a file-level restore using
+the restore runbook in `RESTORE.md`.
 
 ---
 
-## Step 21: Final Checks
+## Step 20: Final Checks
 
 ```sh
 # Firewall -- SSH, HTTP, HTTPS, and DNS when Pi-hole is enabled
@@ -453,6 +493,7 @@ sudo reboot
 ```
 
 After reboot, confirm:
+
 - All services are running
 - `/` is a fresh empty tmpfs
 - Persistent state survived (`/var/lib/hass`, `/var/lib/zigbee2mqtt`, etc.)
@@ -471,20 +512,23 @@ direnv allow    # installs hooks via devShell automatically
 ```
 
 Or without direnv:
+
 ```sh
 nix develop     # enters the devShell, which installs hooks on entry
 ```
 
 Hooks run on every `git commit`:
+
 - **nixfmt-rfc-style** -- formats staged `.nix` files
 - **check-merge-conflicts** -- catches leftover conflict markers
-- **detect-private-key** -- prevents committing private keys
+- **detect-private-keys** -- prevents committing private keys
 
 Local validation:
+
 ```sh
 nix fmt                                  # format all Nix files
 nix flake check                          # validate flake schema
-nix eval .#nixosConfigurations.<host>.config.system.build.toplevel --apply 'x: "ok"'
+nix eval .#nixosConfigurations.<hostname>.config.system.build.toplevel --apply 'x: "ok"'
 ```
 
 ---
@@ -494,15 +538,15 @@ nix eval .#nixosConfigurations.<host>.config.system.build.toplevel --apply 'x: "
 | Symptom | Likely cause | Fix |
 |---|---|---|
 | Secrets not decrypting | Age key missing, mismatched, or mounted too late | Verify `/persist/var/lib/sops-nix/key.txt` exists, `sops.age.keyFile` points there, and its public key matches `.sops.yaml`; re-encrypt with `sops updatekeys` if needed |
-| ZFS pool won't import | hostId mismatch (step 10 skipped) | Boot from USB, set the hostId, destroy and recreate pools with disko |
-| No network after boot | NIC name doesn't match `en*` | Check `ip link`; update `matchConfig.Name` in `hosts/servers/mu/default.nix` |
+| ZFS pool won't import | hostId mismatch (step 9 skipped) | Boot from USB, set the hostId, destroy and recreate pools with disko |
+| No network after boot | NIC name doesn't match `en*` | Check `ip link`; update `matchConfig.Name` in `hosts/servers/<hostname>/default.nix` |
 | Zigbee adapter not found | USB stick missing or udev mismatch | Check `ls -l /dev/zigbee` and `lsusb` for CP2102N (`10c4:ea60`) |
 | Fan sensors missing | nct6775 chip ID mismatch | Run `sensors-detect`, update `force_id` in `hardware-configuration.nix` |
 | State lost after reboot | Path not in impermanence | Add it to `modules/nixos/host/impermanence.nix` or the host's `default.nix` |
-| Can't log in after reboot | `<username>_password_hash` missing, or the age key was unavailable before user creation | Add the password hash per steps 7-8 and check the journal for `cannot read keyfile` / `password file ... does not exist` |
-| SSH fingerprint changes | Host keys not persisted | Regenerate per step 13 |
+| Can't log in after reboot | `<username>_password_hash` missing, or the age key was unavailable before user creation | Add the password hash per steps 6-7 and check the journal for `cannot read keyfile` / `password file ... does not exist` |
+| SSH fingerprint changes | Host keys not persisted | Regenerate per step 12 |
 | `nixos-install` fails to evaluate | `flake.lock` missing or files not staged | Run `git add -A && nix flake lock && git add flake.lock` |
 | `sops` can't decrypt | Wrong SSH key or age key mismatch | Verify `~/.ssh/id_ed25519` is in place and its public key is listed in `.sops.yaml` |
 | `sops-menu` can't decrypt user secrets | SSH key not loaded into the user's agent | Run `ssh-add ~/.ssh/id_ed25519` locally, or use SSH agent forwarding when connecting to a remote host |
 | Pre-commit hooks not running | Hooks not installed | Run `direnv allow` or `nix develop` in the repo root |
-| CI fails on PR | Formatting or eval error | Run `nix fmt` then `nix eval .#nixosConfigurations.<host>...` locally to debug |
+| CI fails on PR | Formatting or eval error | Run `nix fmt` then `nix eval .#nixosConfigurations.<hostname>...` locally to debug |

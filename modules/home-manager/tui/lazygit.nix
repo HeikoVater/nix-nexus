@@ -20,10 +20,7 @@ in
   };
 
   config = lib.mkIf cfg.enable {
-    home.packages = with pkgs; [
-      delta
-      difftastic
-    ];
+    home.packages = with pkgs; [ difftastic ];
 
     programs.lazygit = {
       enable = true;
@@ -50,9 +47,7 @@ in
 
         git.pagers = [
           {
-            pager = ''delta --dark --side-by-side --paging=never --line-numbers --hyperlinks --hyperlinks-file-link-format="lazygit-edit://{path}:{line}"'';
-          }
-          {
+            colorArg = "always";
             externalDiffCommand = "difft --color=always --display=side-by-side --background=dark";
           }
         ];

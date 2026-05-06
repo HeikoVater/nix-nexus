@@ -12,27 +12,27 @@ with CI validation, and each host rebuilds declaratively from the repo.
 ├── flake.nix                           # Flake entry point, all inputs and host definitions
 ├── .envrc                              # Direnv -- activates devShell, installs pre-commit hooks
 ├── .github/workflows/ci.yml           # CI -- runs on every PR to main
+├── RESTORE.md                          # Borg + PostgreSQL + ZFS restore runbook
 ├── SERVER_SETUP.md                     # Server installation guide
 ├── WORKSTATION_SETUP.md                # Workstation installation guide
 ├── hosts/
 │   ├── servers/
 │   │   ├── common.nix                  # Shared server defaults
 │   │   ├── example/                    # Example server host
-│   │   └── mu/                         # Current home server
+│   │   └── <hostname>/                 # Concrete server host
 │   ├── workstations/
-│   │   ├── common.nix                  # Shared desktop/laptop defaults
+│   │   ├── common.nix                  # Shared workstation defaults
 │   │   ├── example/                    # Example workstation host
-│   │   ├── desktop/                    # Desktop host
-│   │   └── laptop/                     # Laptop host
+│   │   └── <hostname>/                 # Concrete workstation host
 │   └── wsl/
 │       ├── common.nix                  # Shared WSL defaults
 │       ├── example/                    # Example WSL host
-│       └── wanzl/                      # Current WSL host
+│       └── <hostname>/                 # Concrete WSL host
 ├── home/
-│   ├── heikov/                         # Per-user Home Manager config
+│   ├── <username>/                     # Per-user Home Manager config
 │   │   ├── base.nix                    # Identity, locale, shared Stylix
 │   │   ├── headless.nix                # CLI/TUI profile
-│   │   └── workstation.nix             # GUI/desktop profile
+│   │   └── workstation.nix             # GUI profile
 │   └── example/                        # Example user template
 ├── modules/
 │   ├── nixos/                          # NixOS module tree
@@ -68,6 +68,7 @@ direnv allow    # installs pre-commit hooks via devShell
 ```
 
 Installation guides:
+- `RESTORE.md` for restore and recovery steps
 - `SERVER_SETUP.md` for `hosts/servers/*`
 - `WORKSTATION_SETUP.md` for `hosts/workstations/*`
 
@@ -81,7 +82,7 @@ host.auto-upgrade.enable = true;
 homelab = {
   hostIPv4 = "192.168.188.2";
   # Optional override; defaults to "<hostname>.lan"
-  domain = "mu.lan";
+  # domain = "<hostname>.lan";
   pihole.enable = true;
   home-assistant.enable = true;
   mosquitto.enable = true;
@@ -160,7 +161,7 @@ Installed automatically via `direnv allow` (or `nix develop`). Runs on every
 commit:
 - **nixfmt-rfc-style** -- formats staged `.nix` files
 - **check-merge-conflicts** -- catches leftover conflict markers
-- **detect-private-key** -- prevents committing private keys
+- **detect-private-keys** -- prevents committing private keys
 
 ### CI (GitHub Actions)
 
@@ -189,6 +190,11 @@ changes (typically at 04:00). For immediate deployment:
 ssh <host>
 nixos-rebuild switch --flake github:<org>/<repo>
 ```
+
+## Restore
+
+See [RESTORE.md](RESTORE.md) for the dedicated Borg, PostgreSQL, Paperless,
+Immich, and ZFS snapshot restore runbook.
 
 ## Secrets Management
 

@@ -8,9 +8,9 @@ USB install flow.
 
 This guide assumes a conventional persistent root filesystem and the simpler
 `hosts/workstations/example/` pattern with a generated
-`hardware-configuration.nix`. Existing hosts such as `desktop` and `laptop`
-use a more customized split (`hardware.nix`, `disks.nix`, optional
-`facter.json`), but that is not required for new workstation hosts.
+`hardware-configuration.nix`. Some workstation hosts in this repo use a more
+customized split (`hardware.nix`, `disks.nix`, optional `facter.json`), but
+that is not required for new workstation hosts.
 
 ## What You Need
 
@@ -154,9 +154,9 @@ cp /mnt/etc/nixos/hardware-configuration.nix \
 
 The example workstation host already imports `./hardware-configuration.nix`.
 
-If you intentionally follow the more customized `desktop` or `laptop` pattern,
-update `hardware.nix`, `disks.nix`, and optional `facter.json` instead of
-using the simple generated file directly.
+If you intentionally follow the more customized split-host pattern, update
+`hardware.nix`, `disks.nix`, and optional `facter.json` instead of using the
+simple generated file directly.
 
 ---
 

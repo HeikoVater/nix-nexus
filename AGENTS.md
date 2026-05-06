@@ -15,8 +15,8 @@ Some hosts use an **impermanent root** (tmpfs) with persisted state under
 family defaults before assuming impermanence is enabled.
 
 Declarative users are the default across the repo. `users.mutableUsers = true`
-should remain the exception; `hosts/wsl/wanzl` is currently the only host that
-uses it because it intentionally avoids secrets.
+should remain the exception and is mainly appropriate for secret-free hosts,
+such as simple WSL setups that intentionally avoid secrets.
 
 ## Agent Restrictions
 
@@ -46,41 +46,30 @@ flake.nix                 Entry point. Defines inputs (nixpkgs, home-manager,
 .envrc                    Direnv config -- activates devShell and installs
                            pre-commit hooks automatically.
 .github/workflows/ci.yml  GitHub Actions CI -- runs on every PR to main.
+RESTORE.md                Borg + PostgreSQL + ZFS restore runbook.
 SERVER_SETUP.md           Installation guide for server hosts.
 WORKSTATION_SETUP.md      Installation guide for workstation hosts.
 
 hosts/servers/            Server host family.
   common.nix              Shared server defaults.
   example/                Example server host.
-  mu/                     Current home server.
+  <hostname>/             Concrete server host.
 
 hosts/workstations/       Desktop/laptop host family.
   common.nix              Shared workstation defaults.
   example/                Example workstation host.
-  desktop/                Desktop host.
-  laptop/                 Laptop host.
+  <hostname>/             Concrete workstation host.
 
 hosts/wsl/                WSL host family.
   common.nix              Shared WSL defaults.
   example/                Example WSL host.
-  wanzl/                  Current WSL host.
-
-hosts/workstations/       Desktop/laptop host family.
-  common.nix              Shared workstation defaults.
-  example/                Example workstation host.
-  desktop/                Desktop host.
-  laptop/                 Laptop host.
-
-hosts/wsl/                WSL host family.
-  common.nix              Shared WSL defaults.
-  example/                Example WSL host.
-  wanzl/                  Current WSL host.
+  <hostname>/             Concrete WSL host.
 
 home/common.nix           Repo-wide Home Manager policy shared by all users.
 home/<username>/          Per-user Home Manager configuration.
   base.nix                Identity, locale, and per-user shared config.
   headless.nix            CLI/TUI profile for servers, WSL, or remote hosts.
-  workstation.nix         GUI/desktop profile layered on top of headless.
+  workstation.nix         GUI profile layered on top of headless.
 home/example/             Example user for reference.
 
 modules/nixos/            NixOS module tree.
