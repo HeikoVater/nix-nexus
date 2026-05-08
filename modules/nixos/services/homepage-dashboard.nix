@@ -120,6 +120,62 @@ let
       name = "Immich";
       siteMonitor = "http://127.0.0.1:2283/";
     };
+    transmission = {
+      description = "Torrent downloads (Flood UI)";
+      group = "Media";
+      icon = "transmission.png";
+      name = "Transmission";
+      siteMonitor = "http://127.0.0.1:9091/";
+    };
+    prowlarr = {
+      description = "Indexer management";
+      group = "Media";
+      icon = "prowlarr.png";
+      name = "Prowlarr";
+      siteMonitor = "http://127.0.0.1:9696/";
+    };
+    sonarr = {
+      description = "TV automation";
+      group = "Media";
+      icon = "sonarr.png";
+      name = "Sonarr";
+      siteMonitor = "http://127.0.0.1:8989/";
+    };
+    radarr = {
+      description = "Movie automation";
+      group = "Media";
+      icon = "radarr.png";
+      name = "Radarr";
+      siteMonitor = "http://127.0.0.1:7878/";
+    };
+    lidarr = {
+      description = "Music automation";
+      group = "Media";
+      icon = "lidarr.png";
+      name = "Lidarr";
+      siteMonitor = "http://127.0.0.1:8686/";
+    };
+    bazarr = {
+      description = "Subtitle automation";
+      group = "Media";
+      icon = "bazarr.png";
+      name = "Bazarr";
+      siteMonitor = "http://127.0.0.1:6767/";
+    };
+    jellyfin = {
+      description = "Media streaming";
+      group = "Media";
+      icon = "jellyfin.png";
+      name = "Jellyfin";
+      siteMonitor = "http://127.0.0.1:8096/";
+    };
+    seerr = {
+      description = "Media requests";
+      group = "Media";
+      icon = "jellyseerr.png";
+      name = "Seerr";
+      siteMonitor = "http://127.0.0.1:5055/";
+    };
   };
 
   groupSpecs = [
@@ -164,6 +220,12 @@ let
       tab = "Ops";
       icon = "mdi-wrench-clock";
       columns = 2;
+    }
+    {
+      name = "Media";
+      tab = "Overview";
+      icon = "mdi-play-box-multiple-outline";
+      columns = 4;
     }
     {
       name = "Other Services";

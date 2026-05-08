@@ -44,6 +44,10 @@ in
         (lib.mkIf display {
           "crypto-tracker-api-key" = { };
         })
+
+        (lib.mkIf config.homelab.nixarr.enable {
+          airvpn_wg_conf = { };
+        })
       ];
     };
   };

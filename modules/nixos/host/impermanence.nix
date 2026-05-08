@@ -25,6 +25,7 @@ let
   mqtt = config.homelab.mosquitto;
   cc = config.homelab.coolercontrol;
   caddy = config.services.caddy.enable;
+  nixarr = config.homelab.nixarr;
   pihole = config.homelab.pihole;
   paperless = config.homelab.paperless;
   immich = config.homelab.immich;
@@ -42,6 +43,7 @@ let
   ++ (lib.optional z2m.enable "/var/lib/zigbee2mqtt")
   ++ (lib.optional mqtt.enable "/var/lib/mosquitto")
   ++ (lib.optional cc.enable "/etc/coolercontrol")
+  ++ (lib.optional nixarr.enable (toString nixarr.stateDir))
   ++ (lib.optionals paperless.enable [
     {
       directory = paperless.dataDir;

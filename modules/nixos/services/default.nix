@@ -8,6 +8,7 @@
     ./zigbee2mqtt.nix
     ./paperless.nix
     ./immich.nix
+    ./nixarr.nix
     ./backups.nix
     ./coolercontrol.nix
     ./homepage-dashboard.nix

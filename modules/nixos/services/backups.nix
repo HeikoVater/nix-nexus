@@ -11,6 +11,7 @@ let
   z2m = config.homelab.zigbee2mqtt;
   pihole = config.homelab.pihole;
   coolercontrol = config.homelab.coolercontrol;
+  nixarr = config.homelab.nixarr;
   paperless = config.homelab.paperless;
   immich = config.homelab.immich;
   needsPostgresDump = paperless.enable || immich.enable;
@@ -22,12 +23,26 @@ let
   runuser = lib.getExe' pkgs.util-linux "runuser";
   pgDump = lib.getExe' postgresPackage "pg_dump";
   pgDumpAll = lib.getExe' postgresPackage "pg_dumpall";
+  nixarrServiceUnits =
+    (lib.optional config.nixarr.transmission.enable "transmission.service")
+    ++ (lib.optional config.nixarr.prowlarr.enable "prowlarr.service")
+    ++ (lib.optional config.nixarr.sonarr.enable "sonarr.service")
+    ++ (lib.optional config.nixarr.radarr.enable "radarr.service")
+    ++ (lib.optional config.nixarr.lidarr.enable "lidarr.service")
+    ++ (lib.optional config.nixarr.bazarr.enable "bazarr.service")
+    ++ (lib.optional config.nixarr.jellyfin.enable "jellyfin.service")
+    ++ (lib.optional config.nixarr.seerr.enable "seerr.service");
+  nixarrStopCommands = lib.concatMapStrings (unit: "systemctl stop ${unit}\n") nixarrServiceUnits;
+  nixarrStartCommands = lib.concatMapStrings (
+    unit: "systemctl start ${unit} || true\n"
+  ) nixarrServiceUnits;
   backupPaths =
     (lib.optional ha.enable "/var/lib/hass")
     ++ (lib.optional z2m.enable "/var/lib/zigbee2mqtt")
     ++ (lib.optional pihole.enable "/etc/pihole")
     ++ (lib.optional pihole.enable "/var/lib/pihole")
     ++ (lib.optional coolercontrol.enable "/etc/coolercontrol")
+    ++ (lib.optional nixarr.enable (toString nixarr.stateDir))
     ++ (lib.optional paperless.enable (toString paperless.storageRoot))
     ++ (lib.optional paperless.enable paperless.dataDir)
     ++ (lib.optional immich.enable (toString immich.mediaLocation))
@@ -96,12 +111,13 @@ in
       };
 
       # Stop services during backup for data consistency.
-      # Home Assistant's SQLite database can corrupt if backed up
-      # while HA is writing to it.
+      # Home Assistant's SQLite database and Nixarr app state can
+      # be inconsistent if copied while their services are writing.
       preHook =
         (lib.optionalString ha.enable "systemctl stop home-assistant.service\n")
         + (lib.optionalString z2m.enable "systemctl stop zigbee2mqtt.service\n")
         + (lib.optionalString pihole.enable "systemctl stop pihole-ftl.service\n")
+        + (lib.optionalString nixarr.enable nixarrStopCommands)
         + (lib.optionalString needsPostgresDump ''
           ${install} -d -m 0700 ${lib.escapeShellArg postgresDumpDir}
           shopt -s nullglob dotglob
@@ -123,6 +139,7 @@ in
       postHook =
         (lib.optionalString pihole.enable "systemctl start pihole-ftl.service || true\n")
         + (lib.optionalString z2m.enable "systemctl start zigbee2mqtt.service || true\n")
+        + (lib.optionalString nixarr.enable nixarrStartCommands)
         + (lib.optionalString ha.enable "systemctl start home-assistant.service || true\n");
 
       persistentTimer = true;

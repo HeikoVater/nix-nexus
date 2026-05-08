@@ -53,6 +53,10 @@ in
     backups.enable = true;
     coolercontrol.enable = true;
     homepage-dashboard.enable = true;
+    nixarr = {
+      enable = true;
+      transmissionPeerPort = 15570;
+    };
 
     home-assistant.enable = false;
     mosquitto.enable = false;
