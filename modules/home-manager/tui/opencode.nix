@@ -105,6 +105,41 @@ in
             "grep*" = "allow";
             "rg*" = "allow";
 
+            # systemd inspection
+            "systemctl status*" = "allow";
+            "systemctl is-active*" = "allow";
+            "systemctl is-enabled*" = "allow";
+            "systemctl list-units*" = "allow";
+            "systemctl list-unit-files*" = "allow";
+            "systemctl list-timers*" = "allow";
+            "systemctl --failed*" = "allow";
+            "systemctl cat*" = "allow";
+            "systemctl --user status*" = "allow";
+            "systemctl --user is-active*" = "allow";
+            "systemctl --user is-enabled*" = "allow";
+            "systemctl --user list-units*" = "allow";
+            "systemctl --user list-unit-files*" = "allow";
+            "systemctl --user list-timers*" = "allow";
+            "systemctl --user --failed*" = "allow";
+            "systemctl --user cat*" = "allow";
+            "journalctl*" = "ask";
+
+            # safe HTTP fetches
+            "curl*" = "ask";
+            "curl -I https://*" = "allow";
+            "curl -sS https://*" = "allow";
+            "curl -sSL https://*" = "allow";
+            "curl -fsSL https://*" = "allow";
+            "curl*--data*" = "deny";
+            "curl*-d*" = "deny";
+            "curl*--form*" = "deny";
+            "curl*-F*" = "deny";
+            "curl*-T*" = "deny";
+            "curl*file://*" = "deny";
+            "curl*localhost*" = "deny";
+            "curl*127.0.0.1*" = "deny";
+            "curl*.lan*" = "deny";
+
             # git — read-only operations allowed
             "git status*" = "allow";
             "git diff*" = "allow";
@@ -135,7 +170,6 @@ in
             "git filter-repo*" = "deny";
             "git gc*" = "deny";
             "git prune*" = "deny";
-
           };
           skill = "ask";
           webfetch = "allow";

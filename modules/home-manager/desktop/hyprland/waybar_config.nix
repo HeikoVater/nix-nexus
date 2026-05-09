@@ -51,7 +51,7 @@ in
     cryptoTrackerApiKeyFile = lib.mkOption {
       type = lib.types.nullOr lib.types.str;
       default = null;
-      example = "/run/secrets/crypto-tracker-api-key";
+      example = "/run/secrets/crypto_tracker_api_key";
       description = "Path to the crypto-tracker API key file. When unset, the crypto widget is omitted.";
     };
   };

@@ -38,11 +38,11 @@ in
         })
 
         (lib.mkIf mountNas {
-          "smb-credentials" = { };
+          smb_credentials = { };
         })
 
         (lib.mkIf display {
-          "crypto-tracker-api-key" = { };
+          crypto_tracker_api_key = { };
         })
 
         (lib.mkIf config.homelab.nixarr.enable {

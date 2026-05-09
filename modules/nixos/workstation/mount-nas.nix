@@ -64,7 +64,7 @@ in
           "x-systemd.idle-timeout=60"
           "x-systemd.device-timeout=5s"
           "x-systemd.mount-timeout=5s"
-          "credentials=${config.sops.secrets."smb-credentials".path}"
+          "credentials=${config.sops.secrets.smb_credentials.path}"
           "uid=${cfg.user}"
           "gid=${cfg.group}"
           "file_mode=0660"

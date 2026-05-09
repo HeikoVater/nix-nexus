@@ -40,7 +40,7 @@ in
         waybar.cryptoTrackerApiKeyFile = lib.attrByPath [
           "sops"
           "secrets"
-          "crypto-tracker-api-key"
+          "crypto_tracker_api_key"
           "path"
         ] null osConfig;
       };
