@@ -3,6 +3,7 @@
     ./caddy.nix
     ./postgresql.nix
     ./pihole.nix
+    ./samba.nix
     ./mosquitto.nix
     ./home-assistant.nix
     ./zigbee2mqtt.nix

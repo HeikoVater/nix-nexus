@@ -37,6 +37,12 @@ in
           };
         })
 
+        (lib.mkIf config.homelab.samba.enable {
+          "samba_password_${config.homelab.samba.user}" = {
+            restartUnits = [ "samba-smbd.service" ];
+          };
+        })
+
         (lib.mkIf mountNas {
           smb_credentials = { };
         })

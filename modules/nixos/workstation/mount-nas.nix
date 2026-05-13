@@ -14,7 +14,7 @@ in
 
     host = lib.mkOption {
       type = lib.types.str;
-      default = "192.168.188.7";
+      default = "mu.lan";
       description = "NAS host or IP address.";
     };
 
@@ -61,7 +61,7 @@ in
         (lib.concatStringsSep "," [
           "x-systemd.automount"
           "noauto"
-          "x-systemd.idle-timeout=60"
+          "x-systemd.idle-timeout=300"
           "x-systemd.device-timeout=5s"
           "x-systemd.mount-timeout=5s"
           "credentials=${config.sops.secrets.smb_credentials.path}"

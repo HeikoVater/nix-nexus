@@ -239,13 +239,15 @@
           };
 
           # Syncthing, Samba shared folders — mixed file sizes.
-          data = {
+          # Keep the default 128 KiB recordsize, but allow larger dnodes so
+          # Samba metadata and xattrs can stay inline more often.
+          share = {
             type = "zfs_fs";
-            mountpoint = "/tank/data";
+            mountpoint = "/tank/share";
             options = {
               mountpoint = "legacy";
               compression = "lz4";
-              recordsize = "128K";
+              dnodesize = "auto";
               secondarycache = "all";
             };
           };

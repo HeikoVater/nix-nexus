@@ -9,6 +9,12 @@ let
   cfg = config.homelab.homepage-dashboard;
   zfsCfg = cfg.zfs;
   hasZfs = config.boot.supportedFilesystems.zfs or false;
+  zfsPoolNames = lib.pipe (builtins.attrValues config.fileSystems) [
+    (builtins.filter (fs: (fs.fsType or null) == "zfs" && fs ? device))
+    (map (fs: builtins.head (lib.splitString "/" fs.device)))
+    lib.unique
+    (lib.sort builtins.lessThan)
+  ];
 
   homepageHost = "homepage.${config.homelab.domain}";
   trustHost = "trust.${config.homelab.domain}";
@@ -243,15 +249,6 @@ let
       ;;
   '') zfsCfg.hiddenMountpoints;
 
-  zfsLabelOverrideCases = lib.concatStrings (
-    lib.mapAttrsToList (mountpoint: label: ''
-      ${lib.escapeShellArg mountpoint})
-        printf '%s' ${lib.escapeShellArg label}
-        return 0
-        ;;
-    '') zfsCfg.labelOverrides
-  );
-
   mkSnapshotService =
     description: script: extraConfig:
     {
@@ -268,6 +265,14 @@ let
     timerConfig = {
       OnBootSec = onBootSec;
       OnUnitActiveSec = onUnitActiveSec;
+      Persistent = true;
+    };
+  };
+
+  mkCalendarSnapshotTimer = onCalendar: {
+    wantedBy = [ "timers.target" ];
+    timerConfig = {
+      OnCalendar = onCalendar;
       Persistent = true;
     };
   };
@@ -427,13 +432,162 @@ let
       pkgs.jq
     ];
     text = ''
+      set -euo pipefail
+
+      out_dir="$1"
+      tmp_file="$(mktemp "$out_dir/zfs.json.XXXXXX")"
+
+      format_size() {
+        local raw unit value
+
+        raw="$(numfmt --to=si --suffix=B --format="%.1f" "$1")"
+        unit="''${raw##*[0-9.]}"
+        value="''${raw%"$unit"}"
+        value="''${value%.0}"
+        printf '%s %s\n' "$value" "$unit"
+      }
+
+      percent_used() {
+        awk -v used="$1" -v total="$2" 'BEGIN {
+          if (total <= 0) {
+            print "0"
+          } else {
+            printf "%.0f", (used / total) * 100
+          }
+        }'
+      }
+
+      pools_json="$({
+        while IFS=$'\t' read -r name size alloc free health; do
+          [ -n "$name" ] || continue
+
+          used_text="$(format_size "$alloc")"
+          size_text="$(format_size "$size")"
+          free_text="$(format_size "$free")"
+          percent="$(percent_used "$alloc" "$size")"
+
+          ${pkgs.jq}/bin/jq -cn \
+            --arg name "$name" \
+            --arg summary "$used_text / $size_text ($percent%)" \
+            --arg health "$health" \
+            --arg used "$used_text" \
+            --arg total "$size_text" \
+            --arg free "$free_text" \
+            --arg percent "$percent" \
+            '{
+              name: $name,
+              summary: $summary,
+              health: $health,
+              used: $used,
+              total: $total,
+              free: $free,
+              percent: $percent
+            }'
+        done < <(zpool list -Hp -o name,size,alloc,free,health 2>/dev/null || true)
+      } | ${pkgs.jq}/bin/jq -s '
+        if length == 0 then
+          [{ name: "Unavailable", summary: "No imported pools detected" }]
+        else
+          .
+        end
+      ')"
+
+      status_json='{}'
+
+      if printf '%s' "$pools_json" | ${pkgs.jq}/bin/jq -e 'all(.[]; has("health"))' >/dev/null; then
+        attention_count="$(printf '%s' "$pools_json" | ${pkgs.jq}/bin/jq '[.[] | select(.health != "ONLINE")] | length')"
+        if [ "$attention_count" = "0" ]; then
+          overall="Healthy"
+          attention="All pools are ONLINE"
+        else
+          overall="Needs attention"
+          attention="$(printf '%s' "$pools_json" | ${pkgs.jq}/bin/jq -r '[.[] | select(.health != "ONLINE") | "\(.name): \(.health)"] | join("; ")')"
+          status_json="$(zpool status -j 2>/dev/null || printf '{}')"
+        fi
+      else
+        overall="Unavailable"
+        attention="Pool health unavailable"
+      fi
+
+      pool_health_json="$(${pkgs.jq}/bin/jq -n \
+        --argjson pools "$pools_json" \
+        --argjson status "$status_json" '
+          $pools
+          | map(
+              . as $pool
+              | ($status.pools[$pool.name] // null) as $pool_status
+              | (
+                  $pool_status.scan_stats
+                  | if type == "object" and (.state // "") != "" and .state != "FINISHED" then
+                      (
+                        [(.function // "SCAN"), .state]
+                        + (
+                          if (.examined // null) != null and (.to_examine // null) != null and .to_examine != "-" and .to_examine != "0B" then
+                            [(.examined + "/" + .to_examine)]
+                          else
+                            []
+                          end
+                        )
+                        | join(" ")
+                      )
+                    else
+                      null
+                    end
+                ) as $scan
+              | ($pool_status.error_count // "0") as $error_count
+              | {
+                  name: $pool.name,
+                  summary: (
+                    [($pool.health // "Unavailable")]
+                    + (if $scan != null then [$scan] else [] end)
+                    + (if $error_count != "0" then ["errors " + $error_count] else [] end)
+                    | join(" | ")
+                  )
+                }
+            )
+        ')
+      "
+
+      ${pkgs.jq}/bin/jq -n \
+        --arg overall "$overall" \
+        --arg attention "$attention" \
+        --argjson pools "$pools_json" \
+        --argjson poolHealth "$pool_health_json" \
+        '{
+          overall: $overall,
+          attention: $attention,
+          pools: $pools,
+          poolHealth: $poolHealth
+        }' > "$tmp_file"
+
+      chmod 0644 "$tmp_file"
+      mv "$tmp_file" "$out_dir/zfs.json"
+    '';
+  };
+
+  zfsDatasetSnapshotScript = pkgs.writeShellApplication {
+    name = "homepage-dashboard-export-zfs-datasets";
+    runtimeInputs = [
+      config.boot.zfs.package
+      pkgs.coreutils
+      pkgs.jq
+      pkgs.util-linux
+    ];
+    text = ''
             set -euo pipefail
 
             out_dir="$1"
-            tmp_file="$(mktemp "$out_dir/zfs.json.XXXXXX")"
+            tmp_file="$(mktemp "$out_dir/zfs-datasets.json.XXXXXX")"
+            expected_pools_json=${lib.escapeShellArg (builtins.toJSON zfsPoolNames)}
 
-            format_bytes() {
-              numfmt --to=iec-i --suffix=B --format="%.1f" "$1"
+            format_size() {
+              local raw unit value
+
+              raw="$(numfmt --to=si --suffix=B --format="%.1f" "$1")"
+              unit="''${raw##*[0-9.]}"
+              value="''${raw%"$unit"}"
+              value="''${value%.0}"
+              printf '%s %s\n' "$value" "$unit"
             }
 
             percent_used() {
@@ -446,6 +600,52 @@ let
               }'
             }
 
+            mounted_zfs_targets="$(findmnt -rn -t zfs -o SOURCE,TARGET 2>/dev/null || true)"
+
+            resolve_dataset_mountpoint() {
+              local dataset="$1"
+              local configured_mountpoint="$2"
+              local dataset_leaf preferred=""
+              local source target
+
+              case "$configured_mountpoint" in
+                /*)
+                  printf '%s\n' "$configured_mountpoint"
+                  return 0
+                  ;;
+                none|-|"")
+                  return 1
+                  ;;
+              esac
+
+              dataset_leaf="''${dataset##*/}"
+
+              while read -r source target; do
+                [ -n "$source" ] || continue
+                [ "$source" = "$dataset" ] || continue
+
+                case "$target" in
+                  /*)
+                    ;;
+                  *)
+                    continue
+                    ;;
+                esac
+
+                if [ "''${target##*/}" = "$dataset_leaf" ]; then
+                  printf '%s\n' "$target"
+                  return 0
+                fi
+
+                if [ -z "$preferred" ]; then
+                  preferred="$target"
+                fi
+              done <<< "$mounted_zfs_targets"
+
+              [ -n "$preferred" ] || return 1
+              printf '%s\n' "$preferred"
+            }
+
             mountpoint_hidden() {
               case "$1" in
       ${zfsHiddenMountpointCases}          *)
@@ -455,74 +655,36 @@ let
             }
 
             dataset_label() {
-              local mountpoint="$1"
-              local leaf
+              local dataset="$1"
 
-              case "$mountpoint" in
-      ${zfsLabelOverrideCases}          *)
+              case "$dataset" in
+                */*)
+                  printf '%s\n' "''${dataset#*/}"
+                  ;;
+                *)
+                  printf '%s\n' "$dataset"
                   ;;
               esac
-
-              if [ "$mountpoint" = "/" ]; then
-                leaf="root"
-              else
-                leaf="''${mountpoint##*/}"
-              fi
-
-              leaf="''${leaf//-/ }"
-              leaf="''${leaf//_/ }"
-
-              printf '%s' "$leaf" | awk '
-                {
-                  for (i = 1; i <= NF; i++) {
-                    $i = toupper(substr($i, 1, 1)) tolower(substr($i, 2))
-                  }
-                  print
-                }
-              '
             }
 
-            pools_json="$({
-              while IFS=$'\t' read -r name size alloc free health; do
+            pool_sizes_json="$({
+              while IFS=$'\t' read -r name size; do
                 [ -n "$name" ] || continue
-
-                used_text="$(format_bytes "$alloc")"
-                size_text="$(format_bytes "$size")"
-                free_text="$(format_bytes "$free")"
-                percent="$(percent_used "$alloc" "$size")"
 
                 ${pkgs.jq}/bin/jq -cn \
                   --arg name "$name" \
-                  --arg summary "$health | $used_text / $size_text used ($percent%)" \
-                  --arg health "$health" \
-                  --arg used "$used_text" \
-                  --arg total "$size_text" \
-                  --arg free "$free_text" \
-                  --arg percent "$percent" \
-                  '{
-                    name: $name,
-                    summary: $summary,
-                    health: $health,
-                    used: $used,
-                    total: $total,
-                    free: $free,
-                    percent: $percent
-                  }'
-              done < <(zpool list -Hp -o name,size,alloc,free,health 2>/dev/null || true)
-            } | ${pkgs.jq}/bin/jq -s '
-              if length == 0 then
-                [{ name: "Unavailable", summary: "No imported pools detected" }]
-              else
-                .
-              end
-            ')"
+                  --argjson size "$size" \
+                  '{ key: $name, value: $size }'
+              done < <(zpool list -Hp -o name,size 2>/dev/null || true)
+            } | ${pkgs.jq}/bin/jq -s 'from_entries')"
 
-            datasets_json="$({
-              while IFS=$'\t' read -r name used avail mountpoint; do
+            datasets_direct_json="$({
+              while IFS=$'\t' read -r name configured_mountpoint mounted; do
+                [ "$mounted" = "yes" ] || continue
+
+                mountpoint="$(resolve_dataset_mountpoint "$name" "$configured_mountpoint" || true)"
+
                 case "$mountpoint" in
-                  none|legacy|-|"")
-                    continue
-                    ;;
                   /*)
                     ;;
                   *)
@@ -534,66 +696,114 @@ let
                   continue
                 fi
 
-                label="$(dataset_label "$mountpoint")"
-
-                total=$((used + avail))
-                used_text="$(format_bytes "$used")"
-                total_text="$(format_bytes "$total")"
-                free_text="$(format_bytes "$avail")"
-                percent="$(percent_used "$used" "$total")"
+                direct_bytes="$(du -sx --block-size=1 "$mountpoint" 2>/dev/null | cut -f1 || true)"
+                if [ -z "$direct_bytes" ]; then
+                  direct_bytes="0"
+                fi
 
                 ${pkgs.jq}/bin/jq -cn \
-                  --arg name "$label" \
+                  --arg name "$(dataset_label "$name")" \
                   --arg dataset "$name" \
                   --arg mountpoint "$mountpoint" \
-                  --arg summary "$used_text / $total_text used ($percent%)" \
-                  --arg free "$free_text" \
+                  --argjson directBytes "$direct_bytes" \
                   '{
                     name: $name,
                     dataset: $dataset,
                     mountpoint: $mountpoint,
-                    summary: $summary,
-                    free: $free
+                    directBytes: $directBytes
                   }'
-              done < <((zfs list -Hp -o name,used,avail,mountpoint 2>/dev/null || true) | sort -t $'\t' -k4,4)
-            } | ${pkgs.jq}/bin/jq -s '.')"
+              done < <(zfs list -Hp -o name,mountpoint,mounted 2>/dev/null || true)
+            } | ${pkgs.jq}/bin/jq -s 'sort_by(.dataset)')"
 
-            datasets_json="$(printf '%s' "$datasets_json" | ${pkgs.jq}/bin/jq '
-              if length == 0 then
-                [{ name: "No mounted datasets", summary: "Nothing tracked" }]
-              else
-                .
-              end
-            ')"
+            datasets_aggregated_json="$(${pkgs.jq}/bin/jq -n \
+              --argjson poolSizes "$pool_sizes_json" \
+              --argjson datasets "$datasets_direct_json" '
+                [
+                  $datasets[]
+                  | . as $item
+                  | ($item.dataset | split("/")[0]) as $pool
+                  | {
+                      name: $item.name,
+                      dataset: $item.dataset,
+                      mountpoint: $item.mountpoint,
+                      pool: $pool,
+                      usedBytes: (
+                        $datasets
+                        | map(select(.dataset == $item.dataset or (.dataset | startswith($item.dataset + "/"))))
+                        | map(.directBytes)
+                        | add
+                      ),
+                      poolBytes: ($poolSizes[$pool] // 0)
+                    }
+                  | .percent = (if .poolBytes > 0 then (((.usedBytes * 100) / .poolBytes) | round) else 0 end)
+                ]
+                | sort_by(.dataset)
+              ')
+            "
 
-            if printf '%s' "$pools_json" | ${pkgs.jq}/bin/jq -e 'all(.[]; has("health"))' >/dev/null; then
-              attention_count="$(printf '%s' "$pools_json" | ${pkgs.jq}/bin/jq '[.[] | select(.health != "ONLINE")] | length')"
-              if [ "$attention_count" = "0" ]; then
-                overall="Healthy"
-                attention="All pools are ONLINE"
-              else
-                overall="Needs attention"
-                attention="$attention_count pool(s) are not ONLINE"
-              fi
-            else
-              overall="Unavailable"
-              attention="Pool health unavailable"
-            fi
+            datasets_json="$({
+              printf '%s' "$datasets_aggregated_json" | ${pkgs.jq}/bin/jq -r '
+                .[]
+                | [
+                    .name,
+                    .dataset,
+                    .mountpoint,
+                    (.usedBytes | tostring),
+                    (.poolBytes | tostring),
+                    (.percent | tostring)
+                  ]
+                | @tsv
+              ' | while IFS=$'\t' read -r name dataset mountpoint used_bytes pool_bytes percent; do
+                used_text="$(format_size "$used_bytes")"
+                pool_text="$(format_size "$pool_bytes")"
+
+                ${pkgs.jq}/bin/jq -cn \
+                  --arg name "$name" \
+                  --arg dataset "$dataset" \
+                  --arg mountpoint "$mountpoint" \
+                  --arg used "$used_text" \
+                  --arg total "$pool_text" \
+                  --arg percent "$percent" \
+                  --arg summary "$used_text / $pool_text ($percent%)" \
+                  '{
+                    name: $name,
+                    dataset: $dataset,
+                    mountpoint: $mountpoint,
+                    used: $used,
+                    total: $total,
+                    percent: $percent,
+                    summary: $summary
+                  }'
+              done
+            } | ${pkgs.jq}/bin/jq -s 'sort_by(.dataset)')"
+
+            datasets_by_pool_json="$(${pkgs.jq}/bin/jq -n \
+              --argjson expected "$expected_pools_json" \
+              --argjson datasets "$datasets_json" '
+                reduce $expected[] as $pool (
+                  {};
+                  .[$pool] = (
+                    $datasets
+                    | map(. + { pool: (.dataset | split("/")[0]) })
+                    | map(select(.dataset != .pool))
+                    | map(select(.pool == $pool))
+                    | sort_by(.dataset)
+                    | map(del(.pool))
+                  )
+                )
+              ')
+            "
 
             ${pkgs.jq}/bin/jq -n \
-              --arg overall "$overall" \
-              --arg attention "$attention" \
-              --argjson pools "$pools_json" \
               --argjson datasets "$datasets_json" \
+              --argjson datasetsByPool "$datasets_by_pool_json" \
               '{
-                overall: $overall,
-                attention: $attention,
-                pools: $pools,
-                datasets: $datasets
+                datasets: $datasets,
+                datasetsByPool: $datasetsByPool
               }' > "$tmp_file"
 
             chmod 0644 "$tmp_file"
-            mv "$tmp_file" "$out_dir/zfs.json"
+            mv "$tmp_file" "$out_dir/zfs-datasets.json"
     '';
   };
 
@@ -783,74 +993,69 @@ let
     }
   ];
 
-  zfsGroups = lib.optionals hasZfs [
-    {
-      "ZFS Summary" = [
-        {
-          "Pool Health" = {
-            description = "Hourly pool health";
-            icon = "mdi-shield-check-outline";
-            widget = {
-              type = "customapi";
-              url = customApiUrl "zfs";
-              refreshInterval = 3600000;
-              display = "list";
-              mappings = [
-                {
-                  field = "overall";
-                  label = "Status";
-                }
-                {
-                  field = "attention";
-                  label = "Attention";
-                }
-              ];
-            };
-          };
-        }
-        {
-          "Pool Capacity" = {
-            description = "Hourly pool usage";
-            icon = "mdi-harddisk";
-            widget = {
-              type = "customapi";
-              url = customApiUrl "zfs";
-              refreshInterval = 3600000;
-              display = "dynamic-list";
-              mappings = {
-                items = "pools";
-                name = "name";
-                label = "summary";
-                limit = 6;
+  zfsGroups =
+    lib.optionals hasZfs [
+      {
+        "ZFS Summary" = [
+          {
+            "Pool Health" = {
+              description = "Refreshed hourly";
+              icon = "mdi-shield-check-outline";
+              widget = {
+                type = "customapi";
+                url = customApiUrl "zfs";
+                refreshInterval = 3600000;
+                display = "dynamic-list";
+                mappings = {
+                  items = "poolHealth";
+                  name = "name";
+                  label = "summary";
+                  limit = 6;
+                };
               };
             };
-          };
-        }
-      ];
-    }
-    {
-      Datasets = [
-        {
-          "Mounted Datasets" = {
-            description = "Auto-discovered mountpoints";
-            icon = "mdi-database-eye";
-            widget = {
-              type = "customapi";
-              url = customApiUrl "zfs";
-              refreshInterval = 3600000;
-              display = "dynamic-list";
-              mappings = {
-                items = "datasets";
-                name = "name";
-                label = "summary";
-                limit = 12;
+          }
+          {
+            "Pool Capacity" = {
+              description = "Refreshed hourly";
+              icon = "mdi-harddisk";
+              widget = {
+                type = "customapi";
+                url = customApiUrl "zfs";
+                refreshInterval = 3600000;
+                display = "dynamic-list";
+                mappings = {
+                  items = "pools";
+                  name = "name";
+                  label = "summary";
+                  limit = 6;
+                };
               };
             };
+          }
+        ];
+      }
+    ]
+    ++ lib.optional (zfsPoolNames != [ ]) {
+      Datasets = map (pool: {
+        "${pool} Datasets" = {
+          description = "Refreshed at 06:00 and 18:00";
+          icon = "mdi-database-eye";
+          widget = {
+            type = "customapi";
+            url = customApiUrl "zfs-datasets";
+            refreshInterval = 43200000;
+            display = "dynamic-list";
+            mappings = {
+              items = "datasetsByPool.${pool}";
+              name = "name";
+              label = "summary";
+              limit = 12;
+            };
           };
-        }
-      ];
-    }
-  ];
+        };
+      }) zfsPoolNames;
+    };
 
   operationsGroups = [
     {
@@ -940,22 +1145,6 @@ in
         example = [ "/var/lib/postgresql" ];
         description = "Mounted ZFS paths to exclude from the dashboard dataset list.";
       };
-
-      labelOverrides = lib.mkOption {
-        type = with lib.types; attrsOf str;
-        default = {
-          "/tank/safe/immich" = "Immich";
-          "/tank/safe/paperless" = "Paperless";
-          "/nix" = "Nix Store";
-          "/persist" = "Persist";
-          "/var/lib/postgresql" = "PostgreSQL";
-        };
-        example = {
-          "/srv/photos" = "Photos";
-          "/tank/media" = "Media";
-        };
-        description = "Friendly labels for auto-discovered ZFS mountpoints on the dashboard.";
-      };
     };
   };
 
@@ -987,7 +1176,18 @@ in
       }
     );
 
-    systemd.timers.homepage-dashboard-export-zfs = lib.mkIf hasZfs (mkSnapshotTimer "3m" "1h");
+    systemd.timers.homepage-dashboard-export-zfs = lib.mkIf hasZfs (mkCalendarSnapshotTimer "hourly");
+
+    systemd.services.homepage-dashboard-export-zfs-datasets = lib.mkIf hasZfs (
+      mkSnapshotService "Export Homepage ZFS dataset snapshot" zfsDatasetSnapshotScript {
+        after = [ "zfs.target" ];
+        wants = [ "zfs.target" ];
+      }
+    );
+
+    systemd.timers.homepage-dashboard-export-zfs-datasets = lib.mkIf hasZfs (
+      mkCalendarSnapshotTimer "*-*-* 06,18:00:00"
+    );
 
     services.homepage-dashboard = {
       enable = true;
@@ -1084,7 +1284,7 @@ in
       logFormat = null;
       extraConfig = ''
         bind 127.0.0.1
-        @homepageSnapshots path /backup.json /cooling.json /zfs.json
+        @homepageSnapshots path /backup.json /cooling.json /zfs.json /zfs-datasets.json
         handle @homepageSnapshots {
           root * ${homepageStatusRoot}
           file_server

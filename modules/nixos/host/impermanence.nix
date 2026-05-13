@@ -27,6 +27,7 @@ let
   caddy = config.services.caddy.enable;
   nixarr = config.homelab.nixarr;
   pihole = config.homelab.pihole;
+  samba = config.homelab.samba;
   paperless = config.homelab.paperless;
   immich = config.homelab.immich;
   persistedDirectories = [
@@ -44,6 +45,7 @@ let
   ++ (lib.optional mqtt.enable "/var/lib/mosquitto")
   ++ (lib.optional cc.enable "/etc/coolercontrol")
   ++ (lib.optional nixarr.enable (toString nixarr.stateDir))
+  ++ (lib.optional samba.enable "/var/lib/samba")
   ++ (lib.optionals paperless.enable [
     {
       directory = paperless.dataDir;
