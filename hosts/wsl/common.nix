@@ -45,6 +45,7 @@
 
   programs.zsh.enable = true;
   programs.git.enable = true;
+  programs.nix-ld.enable = true;
 
   # ─── Nix Settings ──────────────────────────────────────────────
   nix.settings.experimental-features = [

@@ -1,6 +1,7 @@
 {
   config,
   lib,
+  pkgs,
   pkgs-unstable,
   ...
 }:
@@ -8,6 +9,54 @@
 let
   cfg = config.user.tui.opencode;
   smallModel = "openai/gpt-5.4-mini";
+
+  # OpenCode leaks tmux pane startup queries when passthrough is enabled, so
+  # run it with pane-local passthrough disabled and restore the prior state.
+  tmuxWrappedUnstableOpencodeBin = pkgs.writeShellScriptBin "opencode" ''
+    set -euo pipefail
+
+    real_opencode="${lib.getExe pkgs-unstable.opencode}"
+
+    if [ -z "''${TMUX:-}" ]; then
+      exec "$real_opencode" "$@"
+    fi
+
+    tmux_bin="${lib.getExe pkgs.tmux}"
+    if ! pane_id=$("$tmux_bin" display-message -p '#{pane_id}' 2>/dev/null); then
+      exec "$real_opencode" "$@"
+    fi
+
+    had_local=true
+    if local_value=$("$tmux_bin" show-options -q -p -v -t "$pane_id" allow-passthrough 2>/dev/null); then
+      old_value="$local_value"
+    else
+      had_local=false
+      old_value=$("$tmux_bin" show-options -A -p -v -t "$pane_id" allow-passthrough 2>/dev/null || printf 'off\n')
+    fi
+
+    cleanup() {
+      if [ "$had_local" = true ]; then
+        "$tmux_bin" set-option -q -p -t "$pane_id" allow-passthrough "$old_value" >/dev/null 2>&1 || true
+      else
+        "$tmux_bin" set-option -q -p -u -t "$pane_id" allow-passthrough >/dev/null 2>&1 || true
+      fi
+    }
+
+    trap cleanup EXIT HUP INT TERM
+
+    "$tmux_bin" set-option -q -p -t "$pane_id" allow-passthrough off >/dev/null 2>&1 || true
+    "$real_opencode" "$@"
+  '';
+
+  tmuxWrappedUnstableOpencode = pkgs.symlinkJoin {
+    name = "opencode-${pkgs-unstable.opencode.version}-tmux-wrapped";
+    paths = [ pkgs-unstable.opencode ];
+    postBuild = ''
+      rm "$out/bin/opencode"
+      cp "${tmuxWrappedUnstableOpencodeBin}/bin/opencode" "$out/bin/opencode"
+      chmod +x "$out/bin/opencode"
+    '';
+  };
 in
 {
   options.user.tui.opencode = {
@@ -17,11 +66,11 @@ in
   config = lib.mkIf cfg.enable {
     programs.opencode = {
       enable = true;
-      package = pkgs-unstable.opencode;
+      package = tmuxWrappedUnstableOpencode;
 
       settings = {
         share = "disabled";
-        autoupdate = "notify";
+        autoupdate = false;
 
         default_agent = "plan";
 
@@ -82,6 +131,8 @@ in
           };
         };
 
+        watcher.ignore = [ ".worktrees/**" ];
+
         permission = {
           edit = {
             "*" = "allow";
@@ -102,8 +153,9 @@ in
             "sops*" = "ask";
 
             # tools
-            "grep*" = "allow";
-            "rg*" = "allow";
+            "grep *" = "allow";
+            "rg *" = "allow";
+            "man *" = "allow";
 
             # systemd inspection
             "systemctl status*" = "allow";
@@ -125,7 +177,7 @@ in
             "journalctl*" = "ask";
 
             # safe HTTP fetches
-            "curl*" = "ask";
+            "curl *" = "ask";
             "curl -I https://*" = "allow";
             "curl -sS https://*" = "allow";
             "curl -sSL https://*" = "allow";

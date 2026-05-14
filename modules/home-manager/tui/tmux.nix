@@ -7,6 +7,10 @@
 
 let
   cfg = config.user.tui.tmux;
+  tmuxOpencode = import ./tmux-opencode.nix { inherit pkgs; };
+  tmuxGitWorktrees = import ./tmux-git-worktrees.nix {
+    inherit pkgs tmuxOpencode;
+  };
 in
 {
   options.user.tui.tmux = {
@@ -147,33 +151,15 @@ in
           # ─── Git Worktree windows ─────────────────────────────────
 
           # Create/open git worktree in new tab (mainMod+W)
-          # - Prompts for branch name
-          # - Worktree path: <repo>/.worktrees/<branch> (slashes replaced with '-')
-          # - If path exists already, just open the window there
-          # - Window name: repo:branch (repo derived from origin url, fallback to repo dir)
-          # bind -n ${mainMod}-W command-prompt -p "Worktree branch:" \
-          #   "run-shell -b 'branch="%%"; \
-          #     [ -z "$branch" ] && exit 0; \
-          #     cwd="#{pane_current_path}"; \
-          #     repo_root=$(git -C "$cwd" rev-parse --show-toplevel 2>/dev/null) || exit 0; \
-          #     origin=$(git -C "$repo_root" remote get-url origin 2>/dev/null || true); \
-          #     repo=""; \
-          #     if [ -n "$origin" ]; then \
-          #       repo=$(printf "%s" "$origin" | sed -E "s#(.*[:/])([^/]+)(\\.git)?$#\\2#"); \
-          #     fi; \
-          #     [ -z "$repo" ] && repo=$(basename "$repo_root"); \
-          #     wt_dir=".worktrees/$(printf "%s" "$branch" | sed "s#/#-#g")"; \
-          #     wt_path="$repo_root/$wt_dir"; \
-          #     if [ -e "$wt_path" ]; then \
-          #       tmux new-window -c "$wt_path" -n "$repo:$branch"; \
-          #       exit 0; \
-          #     fi; \
-          #     if git -C "$repo_root" show-ref --verify --quiet "refs/heads/$branch"; then \
-          #       git -C "$repo_root" worktree add "$wt_path" "$branch"; \
-          #     else \
-          #       git -C "$repo_root" worktree add -b "$branch" "$wt_path"; \
-          #     fi || { tmux display-message "worktree add failed: $repo:$branch"; exit 1; }; \
-          #     tmux new-window -c "$wt_path" -n "$repo:$branch"'"
+          # - Uses fzf for existing branches plus free-text entry
+          # - Worktree path: <repo>/.worktrees/<branch>
+          # - Reuses the existing tab when that worktree is already open
+          # - Runs in a popup because the picker is interactive
+          bind -n ${mainMod}-W display-popup \
+            -d "#{pane_current_path}" \
+            -w 70% \
+            -h 60% \
+            -E ${tmuxGitWorktrees}/bin/tmux-git-worktrees
 
           # ─── Session Management ────────────────────────────────────
 
@@ -218,10 +204,10 @@ in
           bind -n ${mainMod}-s run-shell -b 'pane_id=$(tmux display-message -p "#{pane_id}"); pane_path=$(tmux display-message -p "#{pane_current_path}"); tmux display-popup -d "$pane_path" -w 80% -h 80% -E "sops-menu --mode tmux --tmux-pane $pane_id"'
 
           # opencode popup
-          bind -n ${mainMod}-o display-popup -E -w 90% -h 90% -d '#{pane_current_path}' opencode
+          bind -n ${mainMod}-o run-shell -b '${tmuxOpencode}/bin/tmux-opencode popup "#{pane_current_path}"'
 
           # opencode sidebar
-          bind -n ${mainMod}-O run-shell -b 'panes=$(tmux list-panes -F "#{pane_id}" -f "#{==:#{pane_title},opencode-sidebar}"); if [ -n "$panes" ]; then for p in $panes; do tmux kill-pane -t "$p"; done; else new=$(tmux split-window -h -p 35 -c "#{pane_current_path}" -P -F "#{pane_id}" opencode); tmux select-pane -t "$new" -T opencode-sidebar; fi'
+          bind -n ${mainMod}-O run-shell -b '${tmuxOpencode}/bin/tmux-opencode sidebar "#{pane_current_path}"'
 
           # ─── Copy Mode (OSC 52 clipboard via set-clipboard) ────────
 

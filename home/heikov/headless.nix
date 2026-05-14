@@ -20,7 +20,7 @@
       fastfetch.enable = true;
       zoxide.enable = true;
       yt-dlp.enable = true;
-      television.enable = true;
+      # television.enable = true;
     };
 
     tui = {

@@ -7,3 +7,6 @@ result-*
 
 # Ignore pre-commit hook artifact
 .pre-commit-config.yaml
+
+# Ignore hidden in-repo git worktrees
+.worktrees/

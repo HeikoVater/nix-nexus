@@ -13,7 +13,7 @@ in
   imports = [
     ./headless.nix
     ./workstation/librewolf.nix
-    ./workstation/pegasus.nix
+    # ./workstation/pegasus.nix
   ];
 
   # Workstation hosts set `user.profile.kind` through host-family
@@ -27,11 +27,11 @@ in
       swayimg.enable = true;
       mpv.enable = true;
       librewolf.enable = true;
-      pegasus.enable = true;
-      retroarch = {
-        enable = true;
-        rootDir = retroarchRootDir;
-      };
+      # pegasus.enable = true;
+      # retroarch = {
+      #   enable = true;
+      #   rootDir = retroarchRootDir;
+      # };
     };
 
     desktop = {

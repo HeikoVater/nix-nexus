@@ -34,7 +34,7 @@
     (pkgs.writeShellScriptBin "wslcopy" ''
       find . -type f \
         -exec echo "===== {} =====" \; \
-        -exec cat {} \; | clip.exe
+        -exec cat {} \; | /mnt/c/Windows/System32/clip.exe
     '')
   ];
 

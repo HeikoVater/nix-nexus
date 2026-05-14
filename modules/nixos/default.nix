@@ -9,6 +9,7 @@ in
 
 {
   imports = [
+    ./cachix.nix
     ./host
     ./services
     ./workstation
