@@ -69,6 +69,21 @@ in
     immich.enable = true;
   };
 
+  # Use the regular limits during the day and the alternate limits overnight.
+  nixarr.transmission.extraSettings = {
+    speed-limit-down = 2000;
+    speed-limit-down-enabled = true;
+    speed-limit-up = 500;
+    speed-limit-up-enabled = true;
+
+    alt-speed-down = 9000;
+    alt-speed-up = 4000;
+    alt-speed-time-enabled = true;
+    alt-speed-time-begin = 0;
+    alt-speed-time-end = 480;
+    alt-speed-time-day = 127;
+  };
+
   # ─── Basic System ──────────────────────────────────────────────
   networking.hostName = hostname;
 
