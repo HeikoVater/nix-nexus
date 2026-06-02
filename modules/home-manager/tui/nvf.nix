@@ -119,6 +119,7 @@ in
           visuals = {
             rainbow-delimiters.enable = true;
             nvim-scrollbar.enable = true;
+            nvim-web-devicons.enable = true;
 
             cinnamon-nvim = {
               enable = true;
@@ -253,9 +254,15 @@ in
           };
 
           # Additional vim plugins from nixpkgs
-          # startPlugins = with pkgs.vimPlugins; [
-          #
-          # ];
+          startPlugins = with pkgs.vimPlugins; [
+            oil-nvim
+          ];
+
+          luaConfigRC.oil = ''
+            require("oil").setup({
+              default_file_explorer = true,
+            })
+          '';
 
           # ═══════════════════════════════════════════════════════════════════
           #  Keymaps
@@ -281,25 +288,25 @@ in
               desc = "Open split left";
               key = "<C-w>h";
               mode = "n";
-              action = ":set splitright&<CR>:vsplit<CR>:set splitright<CR>:Explore<CR>";
+              action = ":set splitright&<CR>:vsplit<CR>:set splitright<CR>:Oil<CR>";
             }
             {
               desc = "Open split below";
               key = "<C-w>j";
               mode = "n";
-              action = ":set splitbelow<CR>:split<CR>:Explore<CR>";
+              action = ":set splitbelow<CR>:split<CR>:Oil<CR>";
             }
             {
               desc = "Open split above";
               key = "<C-w>k";
               mode = "n";
-              action = ":set splitbelow&<CR>:split<CR>:set splitbelow<CR>:Explore<CR>";
+              action = ":set splitbelow&<CR>:split<CR>:set splitbelow<CR>:Oil<CR>";
             }
             {
               desc = "Open split right";
               key = "<C-w>l";
               mode = "n";
-              action = ":set splitright<CR>:vsplit<CR>:Explore<CR>";
+              action = ":set splitright<CR>:vsplit<CR>:Oil<CR>";
             }
 
             # Git merge
