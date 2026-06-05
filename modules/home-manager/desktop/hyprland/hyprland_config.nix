@@ -155,6 +155,7 @@ in
           "$ctrlMod, PRINT, exec, hyprshot -m region"
           "$mainMod, R, exec, hyprctl reload"
           "$shiftMod, Q, killactive"
+          "$mainMod, X, exec, hyprctl kill"
           "$mainMod, SPACE, togglefloating"
           "$mainMod, V, togglesplit"
           "$mainMod, F, fullscreen"
