@@ -223,7 +223,7 @@ in
             "git gc*" = "deny";
             "git prune*" = "deny";
           };
-          skill = "ask";
+          skill = "allow";
           webfetch = "allow";
           doom_loop = "ask";
           external_directory = {
