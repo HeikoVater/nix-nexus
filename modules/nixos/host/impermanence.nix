@@ -55,6 +55,14 @@ let
     }
   ])
   ++ (lib.optional immich.enable "/var/lib/immich")
+  ++ (lib.optionals immich.nsfw.enable [
+    {
+      directory = immich.nsfw.stateDir;
+      user = "immich-nsfw";
+      group = "immich-nsfw";
+      mode = "0750";
+    }
+  ])
   ++ (lib.optionals caddy [
     {
       directory = "/var/lib/caddy";

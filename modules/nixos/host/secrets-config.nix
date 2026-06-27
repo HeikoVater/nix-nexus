@@ -7,6 +7,18 @@
 let
   mountNas = config.workstation.mount-nas.enable;
   display = config.workstation.display.enable;
+  immichNsfw = config.homelab.immich.nsfw;
+  immichNsfwSecretNames = lib.unique (
+    [
+      immichNsfw.sourceApiKeySecret
+    ]
+    ++ lib.optional (immichNsfw.mode == "dual-account") immichNsfw.targetApiKeySecret
+    ++ lib.optional immichNsfw.review.enable immichNsfw.review.passwordSecret
+  );
+  immichNsfwRestartUnits = [
+    "immich-nsfw-scan.service"
+  ]
+  ++ lib.optional immichNsfw.review.enable "immich-nsfw-review.service";
   cfg = config.host.secrets;
 in
 {
@@ -54,6 +66,13 @@ in
         (lib.mkIf config.homelab.nixarr.enable {
           airvpn_wg_conf = { };
         })
+
+        (lib.mkIf immichNsfw.enable (
+          lib.genAttrs immichNsfwSecretNames (_: {
+            owner = "immich-nsfw";
+            restartUnits = immichNsfwRestartUnits;
+          })
+        ))
       ];
     };
   };
