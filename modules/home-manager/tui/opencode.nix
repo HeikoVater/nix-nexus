@@ -75,7 +75,7 @@ in
         default_agent = "plan";
 
         enabled_providers = [
-          # "opencode"
+          "opencode"
           "openai"
         ];
 
