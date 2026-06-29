@@ -15,10 +15,49 @@ let
   hashFile = "${cfg.dataDir}/.requirements-hash";
   packNodeManifestFile = "${cfg.dataDir}/.modelpack-managed-nodes";
   packFileManifestFile = "${cfg.dataDir}/.modelpack-managed-files";
+  modelSourceStateDir = "${cfg.dataDir}/.modelpack-model-state";
 
   packDefinitions = import ./comfyui-modelpacks.nix { inherit lib pkgs; };
-  enabledPackNames = filter (name: cfg.modelPacks.${name}) (attrNames packDefinitions);
-  enabledPacks = map (name: packDefinitions.${name}) enabledPackNames;
+  variantPackNames = filter (name: packDefinitions.${name} ? variants) (attrNames packDefinitions);
+  enabledPackNames = filter (name: cfg.modelPacks.${name}.enable) (attrNames packDefinitions);
+
+  mergePackAttrs =
+    base: variant:
+    base
+    // variant
+    // {
+      nodes = (base.nodes or [ ]) ++ (variant.nodes or [ ]);
+      models = (base.models or [ ]) ++ (variant.models or [ ]);
+      files = (base.files or [ ]) ++ (variant.files or [ ]);
+      extraDependencies = (base.extraDependencies or [ ]) ++ (variant.extraDependencies or [ ]);
+      runtimePackages = (base.runtimePackages or [ ]) ++ (variant.runtimePackages or [ ]);
+      python = (base.python or { }) // (variant.python or { });
+      enableManager = (base.enableManager or false) || (variant.enableManager or false);
+      sanitizeRequirements =
+        (base.sanitizeRequirements or false) || (variant.sanitizeRequirements or false);
+      disableManagerMatrix =
+        (base.disableManagerMatrix or false) || (variant.disableManagerMatrix or false);
+      disableImpactSam2 = (base.disableImpactSam2 or false) || (variant.disableImpactSam2 or false);
+      protectManagerPackages =
+        (base.protectManagerPackages or false) || (variant.protectManagerPackages or false);
+    }
+    // optionalAttrs ((base ? opencv) || (variant ? opencv)) {
+      opencv = variant.opencv or base.opencv;
+    };
+
+  resolvePack =
+    name:
+    let
+      pack = packDefinitions.${name};
+      selectedVariant =
+        if (pack ? variants) && cfg.modelPacks.${name}.variant != null then
+          pack.variants.${cfg.modelPacks.${name}.variant}
+        else
+          { };
+    in
+    mergePackAttrs pack selectedVariant;
+
+  enabledPacks = map resolvePack enabledPackNames;
 
   uniqueBy =
     keyFn: values: attrValues (foldl' (acc: value: acc // { ${keyFn value} = value; }) { } values);
@@ -144,41 +183,16 @@ let
     ${pkgs.rsync}/bin/rsync -a --delete --chmod=ug+rwX "${node.src}/" "${customNodesDir}/${node.name}/"
   '') cfg.declarativeNodes;
 
-  syncPackNodes = concatMapStringsSep "\n" (
-    node:
-    let
-      cloneFlags = optionalString (node.recursive or false) "--recursive";
-      checkoutRef = optionalString (node ? ref) ''
-        ${pkgs.git}/bin/git -C "$target" fetch --all --tags
-        ${pkgs.git}/bin/git -C "$target" checkout --detach ${escapeShellArg node.ref}
-      '';
-    in
-    ''
-      target="${customNodesDir}/${node.name}"
-      if [ -d "$target/.git" ]; then
-        ${checkoutRef}
-      elif [ -e "$target" ]; then
-        echo "Custom node ${node.name} already exists and is not git-managed; leaving it in place"
-      else
-        echo "Cloning model-pack node: ${node.name}"
-        ${pkgs.git}/bin/git clone ${cloneFlags} ${escapeShellArg node.url} "$target"
-        ${checkoutRef}
-      fi
-    ''
-  ) packNodes;
+  syncPackNodes = concatMapStringsSep "\n" (node: ''
+    sync_pack_node \
+      ${escapeShellArg node.name} \
+      ${escapeShellArg node.url} \
+      ${escapeShellArg (node.ref or "")} \
+      ${escapeShellArg (if node.recursive or false then "true" else "false")}
+  '') packNodes;
 
   syncPackModels = concatMapStringsSep "\n" (model: ''
-    target="${comfyuiDir}/models/${model.path}"
-    if [ -f "$target" ]; then
-      echo "Model ${model.path} exists - skip"
-    else
-      echo "Downloading model: ${model.path}"
-      ${pkgs.coreutils}/bin/mkdir -p "$(${pkgs.coreutils}/bin/dirname "$target")"
-      tmp_target="$target.tmp"
-      ${pkgs.coreutils}/bin/rm -f "$tmp_target"
-      ${pkgs.curl}/bin/curl -L --fail --retry 5 --retry-delay 10 --retry-connrefused --progress-bar --show-error -o "$tmp_target" ${escapeShellArg model.url}
-      ${pkgs.coreutils}/bin/mv "$tmp_target" "$target"
-    fi
+    sync_pack_model ${escapeShellArg model.path} ${escapeShellArg model.url}
   '') packModels;
 
   syncPackFiles = concatMapStringsSep "\n" (file: ''
@@ -253,6 +267,219 @@ let
       --exclude '/user' \
       "${comfyuiSrc}/" "${comfyuiDir}/"
 
+    resolve_origin_head_ref() {
+      local repo="$1"
+      local origin_head_ref=""
+
+      origin_head_ref=$(${pkgs.git}/bin/git -C "$repo" symbolic-ref --quiet --short refs/remotes/origin/HEAD || true)
+      if [ -z "$origin_head_ref" ]; then
+        ${pkgs.git}/bin/git -C "$repo" remote set-head origin --auto >/dev/null 2>&1 || true
+        origin_head_ref=$(${pkgs.git}/bin/git -C "$repo" symbolic-ref --quiet --short refs/remotes/origin/HEAD || true)
+      fi
+
+      [ -n "$origin_head_ref" ] || return 1
+      printf '%s\n' "$origin_head_ref"
+    }
+
+    checkout_pack_node_repo() {
+      local repo="$1"
+      local ref="$2"
+      local recursive="$3"
+      local name="$4"
+
+      if [ -n "$ref" ]; then
+        ${pkgs.git}/bin/git -C "$repo" checkout --detach -f "$ref"
+      else
+        local origin_head_ref
+
+        origin_head_ref=$(resolve_origin_head_ref "$repo") || {
+          echo "Unable to determine default branch for model-pack node: $name" >&2
+          return 1
+        }
+
+        ${pkgs.git}/bin/git -C "$repo" checkout --detach -f "$origin_head_ref"
+      fi
+
+      if [ "$recursive" = "true" ]; then
+        ${pkgs.git}/bin/git -C "$repo" submodule sync --recursive
+        ${pkgs.git}/bin/git -C "$repo" submodule update --init --recursive
+      fi
+    }
+
+    clone_pack_node_repo() {
+      local name="$1"
+      local url="$2"
+      local ref="$3"
+      local recursive="$4"
+      local repo="$5"
+      local clone_args=()
+
+      if [ "$recursive" = "true" ]; then
+        clone_args+=(--recursive)
+      fi
+
+      ${pkgs.git}/bin/git clone ''${clone_args[@]} "$url" "$repo"
+      checkout_pack_node_repo "$repo" "$ref" "$recursive" "$name"
+    }
+
+    sync_pack_node() {
+      local name="$1"
+      local url="$2"
+      local ref="$3"
+      local recursive="$4"
+      local target="${customNodesDir}/$name"
+      local current_url=""
+
+      if [ -d "$target/.git" ]; then
+        current_url=$(${pkgs.git}/bin/git -C "$target" remote get-url origin 2>/dev/null || true)
+      fi
+
+      if [ -d "$target/.git" ] && [ "$current_url" = "$url" ]; then
+        echo "Updating model-pack node: $name"
+        ${pkgs.git}/bin/git -C "$target" fetch --all --tags --prune
+        checkout_pack_node_repo "$target" "$ref" "$recursive" "$name"
+        return 0
+      fi
+
+      local tmp_target
+      tmp_target=$(mktemp -d "${customNodesDir}/.$name.tmp.XXXXXX")
+
+      if [ -e "$target" ]; then
+        echo "Replacing model-pack node: $name"
+      else
+        echo "Cloning model-pack node: $name"
+      fi
+
+      if ! clone_pack_node_repo "$name" "$url" "$ref" "$recursive" "$tmp_target"; then
+        ${pkgs.coreutils}/bin/rm -rf "$tmp_target"
+        return 1
+      fi
+
+      if [ -e "$target" ]; then
+        local backup_target
+
+        backup_target="$target.previous.$$"
+        ${pkgs.coreutils}/bin/rm -rf "$backup_target"
+        ${pkgs.coreutils}/bin/mv "$target" "$backup_target"
+        if ${pkgs.coreutils}/bin/mv "$tmp_target" "$target"; then
+          ${pkgs.coreutils}/bin/rm -rf "$backup_target"
+        else
+          ${pkgs.coreutils}/bin/mv "$backup_target" "$target"
+          ${pkgs.coreutils}/bin/rm -rf "$tmp_target"
+          return 1
+        fi
+      else
+        ${pkgs.coreutils}/bin/mv "$tmp_target" "$target"
+      fi
+    }
+
+    extract_last_header() {
+      local headers="$1"
+      local header_name="$2"
+      local value=""
+
+      value=$(
+        ${pkgs.gnugrep}/bin/grep -i "^$header_name:" "$headers" \
+          | ${pkgs.coreutils}/bin/tail -n 1 \
+          | ${pkgs.gnused}/bin/sed -E "s/^$header_name:[[:space:]]*//I; s/\r$//" \
+          || true
+      )
+
+      printf '%s\n' "$value"
+    }
+
+    query_model_fingerprint() {
+      local url="$1"
+      local headers
+      local fingerprint=""
+
+      headers=$(mktemp)
+      if ! ${pkgs.curl}/bin/curl -L --fail --retry 5 --retry-delay 10 --retry-connrefused --silent --show-error --head --dump-header "$headers" --output /dev/null "$url"; then
+        ${pkgs.coreutils}/bin/rm -f "$headers"
+        return 1
+      fi
+
+      fingerprint=$(extract_last_header "$headers" "etag")
+      if [ -z "$fingerprint" ]; then
+        fingerprint=$(extract_last_header "$headers" "last-modified")
+      fi
+
+      ${pkgs.coreutils}/bin/rm -f "$headers"
+      printf '%s\n' "$fingerprint"
+    }
+
+    download_pack_model() {
+      local url="$1"
+      local target="$2"
+      local headers="$3"
+      local tmp_target="$target.tmp"
+
+      ${pkgs.coreutils}/bin/rm -f "$tmp_target"
+      ${pkgs.curl}/bin/curl -L --fail --retry 5 --retry-delay 10 --retry-connrefused --progress-bar --show-error --dump-header "$headers" -o "$tmp_target" "$url"
+      ${pkgs.coreutils}/bin/mv "$tmp_target" "$target"
+    }
+
+    sync_pack_model() {
+      local rel_path="$1"
+      local url="$2"
+      local target="${comfyuiDir}/models/$rel_path"
+      local state_base="${modelSourceStateDir}/$rel_path"
+      local url_state="$state_base.url"
+      local fingerprint_state="$state_base.fingerprint"
+      local current_url=""
+      local current_fingerprint=""
+      local remote_fingerprint=""
+      local should_download="false"
+
+      ${pkgs.coreutils}/bin/mkdir -p "$(${pkgs.coreutils}/bin/dirname "$target")" "$(${pkgs.coreutils}/bin/dirname "$url_state")"
+
+      [ -f "$url_state" ] && current_url=$(${pkgs.coreutils}/bin/cat "$url_state")
+      [ -f "$fingerprint_state" ] && current_fingerprint=$(${pkgs.coreutils}/bin/cat "$fingerprint_state")
+
+      if [ ! -f "$target" ]; then
+        should_download="true"
+      elif [ -z "$current_url" ]; then
+        printf '%s\n' "$url" > "$url_state"
+        current_url="$url"
+      elif [ "$current_url" != "$url" ]; then
+        should_download="true"
+      fi
+
+      if [ "$should_download" = "false" ]; then
+        remote_fingerprint=$(query_model_fingerprint "$url" || true)
+        if [ -z "$remote_fingerprint" ]; then
+          echo "Model $rel_path fingerprint unavailable - keeping existing file"
+        elif [ -z "$current_fingerprint" ]; then
+          echo "Bootstrapping model fingerprint: $rel_path"
+          printf '%s\n' "$remote_fingerprint" > "$fingerprint_state"
+        elif [ "$current_fingerprint" = "$remote_fingerprint" ]; then
+          echo "Model $rel_path is current - skip"
+        else
+          should_download="true"
+        fi
+      fi
+
+      if [ "$should_download" = "true" ]; then
+        local headers
+
+        echo "Downloading model: $rel_path"
+        headers=$(mktemp)
+        download_pack_model "$url" "$target" "$headers"
+        remote_fingerprint=$(extract_last_header "$headers" "etag")
+        if [ -z "$remote_fingerprint" ]; then
+          remote_fingerprint=$(extract_last_header "$headers" "last-modified")
+        fi
+        ${pkgs.coreutils}/bin/rm -f "$headers"
+
+        printf '%s\n' "$url" > "$url_state"
+        if [ -n "$remote_fingerprint" ]; then
+          printf '%s\n' "$remote_fingerprint" > "$fingerprint_state"
+        else
+          ${pkgs.coreutils}/bin/rm -f "$fingerprint_state"
+        fi
+      fi
+    }
+
     cleanup_removed_pack_entries() {
       local manifest="$1"
       local desired="$2"
@@ -268,20 +495,36 @@ let
           if [ "$kind" = "directory" ]; then
             ${pkgs.coreutils}/bin/rm -rf "$path"
           else
+            remove_model_state "$path"
             ${pkgs.coreutils}/bin/rm -f "$path"
-            prune_empty_parents "$(${pkgs.coreutils}/bin/dirname "$path")"
+            prune_empty_parents "${comfyuiDir}" "$(${pkgs.coreutils}/bin/dirname "$path")"
           fi
         fi
       done < "$manifest"
     }
 
     prune_empty_parents() {
-      local dir="$1"
+      local base="$1"
+      local dir="$2"
 
-      while [ "$dir" != "${comfyuiDir}" ] && [ "$dir" != "/" ]; do
+      while [ "$dir" != "$base" ] && [ "$dir" != "/" ]; do
         ${pkgs.coreutils}/bin/rmdir "$dir" 2>/dev/null || break
         dir="$(${pkgs.coreutils}/bin/dirname "$dir")"
       done
+    }
+
+    remove_model_state() {
+      local target="$1"
+
+      case "$target" in
+        "${comfyuiDir}/models/"*)
+          local rel_path="''${target#${comfyuiDir}/models/}"
+          local state_base="${modelSourceStateDir}/$rel_path"
+
+          ${pkgs.coreutils}/bin/rm -f "$state_base.url" "$state_base.fingerprint"
+          prune_empty_parents "${modelSourceStateDir}" "$(${pkgs.coreutils}/bin/dirname "$state_base")"
+          ;;
+      esac
     }
 
     # Ensure runtime directories exist
@@ -306,17 +549,20 @@ let
       rm -rf "${customNodesDir}/comfyui-manager" "${comfyuiDir}/user/__manager"
     ''}
 
-    # Sync declarative custom nodes
-    ${syncDeclarativeNodes}
-
-    # Remove items from previously enabled packs before syncing the desired set.
-    cleanup_removed_pack_entries "${packNodeManifestFile}" "$DESIRED_PACK_NODE_MANIFEST" directory
-    cleanup_removed_pack_entries "${packFileManifestFile}" "$DESIRED_PACK_FILE_MANIFEST" file
-
-    # Sync model-pack custom nodes, model files, and tracked assets.
+    # Sync model-pack custom nodes, model files, and tracked assets first so
+    # existing working files remain in place if a replacement fetch fails.
     ${syncPackNodes}
     ${syncPackModels}
     ${syncPackFiles}
+
+    # Remove items from previously enabled packs only after the replacement set
+    # has been realized successfully.
+    cleanup_removed_pack_entries "${packNodeManifestFile}" "$DESIRED_PACK_NODE_MANIFEST" directory
+    cleanup_removed_pack_entries "${packFileManifestFile}" "$DESIRED_PACK_FILE_MANIFEST" file
+
+    # Sync declarative custom nodes last so pack-to-declarative migrations can
+    # happen in a single deployment.
+    ${syncDeclarativeNodes}
 
     cp -f "$DESIRED_PACK_NODE_MANIFEST" "${packNodeManifestFile}"
     cp -f "$DESIRED_PACK_FILE_MANIFEST" "${packFileManifestFile}"
@@ -501,9 +747,23 @@ in
     modelPacks = mapAttrs (
       name: pack:
       mkOption {
-        type = types.bool;
-        default = false;
-        description = "Enable the ${pack.description}.";
+        type = types.submodule {
+          options = {
+            enable = mkEnableOption pack.description;
+          }
+          // optionalAttrs (pack ? variants) {
+            variant = mkOption {
+              type = types.nullOr (types.enum (attrNames pack.variants));
+              default = null;
+              description = ''
+                Model variant for ${pack.description}. Required when this pack is enabled.
+                Available variants: ${concatStringsSep ", " (attrNames pack.variants)}.
+              '';
+            };
+          };
+        };
+        default = { };
+        description = "Configuration for ${pack.description}.";
       }
     ) packDefinitions;
 
@@ -569,6 +829,13 @@ in
   };
 
   config = mkIf cfg.enable {
+    assertions = map (name: {
+      assertion = !cfg.modelPacks.${name}.enable || cfg.modelPacks.${name}.variant != null;
+      message = "services.comfyui.modelPacks.${name}.variant must be set when enabling ${name}. Valid variants: ${
+        concatStringsSep ", " (attrNames packDefinitions.${name}.variants)
+      }.";
+    }) variantPackNames;
+
     programs.nix-ld = {
       enable = true;
       libraries = runtimeLibs;
