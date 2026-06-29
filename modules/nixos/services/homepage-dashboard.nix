@@ -126,6 +126,13 @@ let
       name = "Immich";
       siteMonitor = "http://127.0.0.1:2283/";
     };
+    immich-review = {
+      description = "Immich NSFW review queue";
+      group = "Other Services";
+      icon = "https://${config.homelab.immich.nsfw.review.host}/favicon.svg";
+      name = "Immich Review";
+      siteMonitor = null;
+    };
     transmission = {
       description = "Torrent downloads (Flood UI)";
       group = "Media";

@@ -16,6 +16,10 @@ let
   chownBin = lib.getExe' pkgs.coreutils "chown";
   chmodBin = lib.getExe' pkgs.coreutils "chmod";
   python = pkgs.python3.withPackages (pythonPackages: [ pythonPackages.requests ]);
+  immichReviewIconSvg = builtins.readFile ./immich-review/icon.svg;
+  immichNsfwGuardScript =
+    builtins.replaceStrings [ "__IMMICH_REVIEW_ICON_SVG__" ] [ immichReviewIconSvg ]
+      (builtins.readFile ./immich-review/immich-nsfw-guard.py);
   nudeNetVersion = "3.4.2";
   nudeNetWheel = pkgs.stdenvNoCC.mkDerivation {
     pname = "nudenet-wheel";
@@ -86,7 +90,7 @@ let
     name = "immich-nsfw-guard";
     executable = true;
     destination = "/bin/immich-nsfw-guard";
-    text = "#!${python}/bin/python3\n${builtins.readFile ./immich-nsfw-guard.py}";
+    text = "#!${python}/bin/python3\n${immichNsfwGuardScript}";
   };
   nsfwConfigFile = pkgs.writeText "immich-nsfw-guard.json" (
     builtins.toJSON (
