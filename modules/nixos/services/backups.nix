@@ -36,6 +36,13 @@ let
   nixarrStartCommands = lib.concatMapStrings (
     unit: "systemctl start ${unit} || true\n"
   ) nixarrServiceUnits;
+  immichNsfwStopCommands = lib.optionalString immich.nsfw.enable (
+    "systemctl stop immich-nsfw-scan.service\n"
+    + lib.optionalString immich.nsfw.review.enable "systemctl stop immich-nsfw-review.service\n"
+  );
+  immichNsfwStartCommands = lib.optionalString (immich.nsfw.enable && immich.nsfw.review.enable) (
+    "systemctl start immich-nsfw-review.service || true\n"
+  );
   backupPaths =
     (lib.optional ha.enable "/var/lib/hass")
     ++ (lib.optional z2m.enable "/var/lib/zigbee2mqtt")
@@ -47,6 +54,7 @@ let
     ++ (lib.optional paperless.enable paperless.dataDir)
     ++ (lib.optional immich.enable (toString immich.mediaLocation))
     ++ (lib.optional immich.enable "/var/lib/immich")
+    ++ (lib.optional immich.nsfw.enable immich.nsfw.stateDir)
     ++ (lib.optional needsPostgresDump postgresDumpDir);
 in
 {
@@ -118,6 +126,7 @@ in
         + (lib.optionalString z2m.enable "systemctl stop zigbee2mqtt.service\n")
         + (lib.optionalString pihole.enable "systemctl stop pihole-ftl.service\n")
         + (lib.optionalString nixarr.enable nixarrStopCommands)
+        + immichNsfwStopCommands
         + (lib.optionalString needsPostgresDump ''
           ${install} -d -m 0700 ${lib.escapeShellArg postgresDumpDir}
           shopt -s nullglob dotglob
@@ -140,7 +149,8 @@ in
         (lib.optionalString pihole.enable "systemctl start pihole-ftl.service || true\n")
         + (lib.optionalString z2m.enable "systemctl start zigbee2mqtt.service || true\n")
         + (lib.optionalString nixarr.enable nixarrStartCommands)
-        + (lib.optionalString ha.enable "systemctl start home-assistant.service || true\n");
+        + (lib.optionalString ha.enable "systemctl start home-assistant.service || true\n")
+        + immichNsfwStartCommands;
 
       persistentTimer = true;
     };

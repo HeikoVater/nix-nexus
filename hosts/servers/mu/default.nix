@@ -66,7 +66,17 @@ in
       enable = true;
       consumptionDirIsPublic = true;
     };
-    immich.enable = true;
+    immich = {
+      enable = true;
+      nsfw = {
+        enable = true;
+        maxAssetsPerRun = 25;
+        classifier = {
+          model = "640m";
+          batchSize = 25;
+        };
+      };
+    };
   };
 
   # Use the regular limits during the day and the alternate limits overnight.
