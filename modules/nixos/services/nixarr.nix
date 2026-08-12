@@ -2,6 +2,7 @@
   config,
   lib,
   inputs,
+  pkgs,
   ...
 }:
 
@@ -21,6 +22,124 @@ let
     extraConfig = ''
       tls internal
       reverse_proxy 127.0.0.1:${toString port}
+    '';
+  };
+
+  recyclarrQualityProfile = {
+    name = "HD-1080p";
+    reset_unmatched_scores.enabled = true;
+    min_format_score = 1;
+    min_upgrade_format_score = 1;
+    upgrade = {
+      allowed = false;
+      until_quality = "Bluray-1080p";
+      until_score = 100;
+    };
+    quality_sort = "top";
+    qualities = [
+      { name = "Bluray-1080p"; }
+      { name = "WEBDL-1080p"; }
+      { name = "WEBRip-1080p"; }
+      { name = "HDTV-1080p"; }
+    ];
+  };
+
+  mkRecyclarrQualityDefinition = type: {
+    inherit type;
+
+    # Values are MB per minute. Keep HDTV/WEB close to the current live
+    # settings and only loosen Bluray a bit so better 1080p encodes fit.
+    qualities = [
+      {
+        name = "HDTV-1080p";
+        min = 10;
+        preferred = 30;
+        max = 100;
+      }
+      {
+        name = "WEBDL-1080p";
+        min = 10;
+        preferred = 30;
+        max = 100;
+      }
+      {
+        name = "WEBRip-1080p";
+        min = 10;
+        preferred = 30;
+        max = 100;
+      }
+      {
+        name = "Bluray-1080p";
+        min = 20;
+        preferred = 50;
+        max = 150;
+      }
+    ];
+  };
+
+  mkRecyclarrInstance =
+    {
+      baseUrl,
+      apiKey,
+      qualityType,
+      x264TrashId,
+      x265TrashId,
+      av1TrashId,
+    }:
+    {
+      base_url = baseUrl;
+      api_key = apiKey;
+      delete_old_custom_formats = true;
+      quality_definition = mkRecyclarrQualityDefinition qualityType;
+      quality_profiles = [ recyclarrQualityProfile ];
+      custom_formats = [
+        {
+          trash_ids = [ x264TrashId ];
+          assign_scores_to = [
+            {
+              name = recyclarrQualityProfile.name;
+              score = 50;
+            }
+          ];
+        }
+        {
+          trash_ids = [ x265TrashId ];
+          assign_scores_to = [
+            {
+              name = recyclarrQualityProfile.name;
+              score = 100;
+            }
+          ];
+        }
+        {
+          trash_ids = [ av1TrashId ];
+          assign_scores_to = [
+            {
+              name = recyclarrQualityProfile.name;
+              score = -10000;
+            }
+          ];
+        }
+      ];
+    };
+
+  recyclarr = inputs.nixpkgs-unstable.legacyPackages.${pkgs.stdenv.hostPlatform.system}.recyclarr;
+  recyclarrPackage = pkgs.writeShellApplication {
+    name = "recyclarr";
+    text = ''
+      args=()
+      while (( $# )); do
+        if [[ "$1" == "--app-data" ]]; then
+          export RECYCLARR_CONFIG_DIR="$2"
+          export RECYCLARR_DATA_DIR="$2"
+          shift 2
+        else
+          args+=("$1")
+          shift
+        fi
+      done
+
+      exec ${lib.getExe recyclarr} "''${args[@]}"
     '';
   };
 in
@@ -157,178 +276,29 @@ in
 
       recyclarr = {
         enable = true;
+        # Nixarr still passes Recyclarr 7's --app-data flag. The wrapper maps
+        # it to the environment variables required by Recyclarr 8.
+        package = recyclarrPackage;
         configuration = {
           sonarr = {
-            "web-1080p-alternative" = {
-              base_url = "http://127.0.0.1:8989";
-              api_key = "!env_var SONARR_API_KEY";
-              delete_old_custom_formats = true;
-              quality_definition.type = "series";
-              quality_profiles = [
-                {
-                  trash_id = "9d142234e45d6143785ac55f5a9e8dc9";
-                  reset_unmatched_scores.enabled = true;
-                }
-              ];
-              custom_format_groups = {
-                add = [
-                  {
-                    trash_id = "158188097a58d7687dee647e04af0da3";
-                    select = [
-                      "47435ece6b99a0b477caf360e79ba0bb"
-                    ];
-                  }
-                  {
-                    trash_id = "85fae4a2294965b75710ef2989c850eb";
-                    select = [
-                      "218e93e5702f44a68ad9e3c6ba87d2f0"
-                      "43b3cf48cb385cd3eac608ee6bca7f09"
-                    ];
-                  }
-                  {
-                    trash_id = "59c3af66780d08332fdc64e68297098f";
-                    select = [
-                      "15a05bc7c1a36e2b57fd628f8977e2fc"
-                      "32b367365729d530ca1c124a0b180c64"
-                      "85c61753df5da1fb2aab6f2a47426b09"
-                      "6f808933a71bd9666531610cb8c059cc"
-                      "fbcb31d8dabd2a319072b84fc0b7249c"
-                      "9c11cd3f07101cdba90a2d81cf0e56b4"
-                      "e2315f990da2e2cbfc9fa5b7a6fcfe48"
-                      "23297a736ca77c0fc8e70f8edd7ee56c"
-                    ];
-                  }
-                ];
-              };
-            };
-
-            "web-2160p" = {
-              base_url = "http://127.0.0.1:8989";
-              api_key = "!env_var SONARR_API_KEY";
-              delete_old_custom_formats = true;
-              quality_definition.type = "series";
-              quality_profiles = [
-                {
-                  trash_id = "d1498e7d189fbe6c7110ceaabb7473e6";
-                  reset_unmatched_scores.enabled = true;
-                }
-              ];
-              custom_format_groups = {
-                add = [
-                  {
-                    trash_id = "e3f37512790f00d0e89e54fe5e790d1c";
-                    select = [
-                      "9b64dff695c2115facf1b6ea59c9bd07"
-                    ];
-                  }
-                  {
-                    trash_id = "85fae4a2294965b75710ef2989c850eb";
-                    select = [
-                      "218e93e5702f44a68ad9e3c6ba87d2f0"
-                      "43b3cf48cb385cd3eac608ee6bca7f09"
-                    ];
-                  }
-                  {
-                    trash_id = "59c3af66780d08332fdc64e68297098f";
-                    select = [
-                      "15a05bc7c1a36e2b57fd628f8977e2fc"
-                      "32b367365729d530ca1c124a0b180c64"
-                      "85c61753df5da1fb2aab6f2a47426b09"
-                      "6f808933a71bd9666531610cb8c059cc"
-                      "fbcb31d8dabd2a319072b84fc0b7249c"
-                      "9c11cd3f07101cdba90a2d81cf0e56b4"
-                      "e2315f990da2e2cbfc9fa5b7a6fcfe48"
-                      "23297a736ca77c0fc8e70f8edd7ee56c"
-                    ];
-                  }
-                  {
-                    trash_id = "d776a1ea912a117d66d83b880ff2055d";
-                  }
-                ];
-              };
+            sonarr_hd_1080p = mkRecyclarrInstance {
+              baseUrl = "http://127.0.0.1:8989";
+              apiKey = "!env_var SONARR_API_KEY";
+              qualityType = "series";
+              x264TrashId = "cddfb4e32db826151d97352b8e37c648";
+              x265TrashId = "c9eafd50846d299b862ca9bb6ea91950";
+              av1TrashId = "15a05bc7c1a36e2b57fd628f8977e2fc";
             };
           };
 
           radarr = {
-            "hd-bluray-web" = {
-              base_url = "http://127.0.0.1:7878";
-              api_key = "!env_var RADARR_API_KEY";
-              delete_old_custom_formats = true;
-              quality_definition.type = "movie";
-              quality_profiles = [
-                {
-                  trash_id = "d1d67249d3890e49bc12e275d989a7e9";
-                  reset_unmatched_scores.enabled = true;
-                }
-              ];
-              custom_format_groups = {
-                add = [
-                  {
-                    trash_id = "f8bf8eab4617f12dfdbd16303d8da245";
-                    select = [
-                      "dc98083864ea246d05a42df0d05f81cc"
-                    ];
-                  }
-                  {
-                    trash_id = "a3ac6af01d78e4f21fcb75f601ac96df";
-                    select = [
-                      "b8cd450cbfa689c0259a01d9e29ba3d6"
-                      "cae4ca30163749b891686f95532519bd"
-                      "b6832f586342ef70d9c128d40c07b872"
-                      "cc444569854e9de0b084ab2b8b1532b2"
-                      "ed38b889b31be83fda192888e2286d83"
-                      "0a3f082873eb454bde444150b70253cc"
-                      "e6886871085226c3da1830830146846c"
-                      "90a6f9a284dff5103f6346090e6280c8"
-                      "e204b80c87be9497a8a6eaff48f72905"
-                      "712d74cd88bceb883ee32f773656b1f5"
-                      "bfd8eb01832d646a0a89c4deb46f8564"
-                    ];
-                  }
-                ];
-              };
-            };
-
-            "uhd-bluray-web" = {
-              base_url = "http://127.0.0.1:7878";
-              api_key = "!env_var RADARR_API_KEY";
-              delete_old_custom_formats = true;
-              quality_definition.type = "movie";
-              quality_profiles = [
-                {
-                  trash_id = "64fb5f9858489bdac2af690e27c8f42f";
-                  reset_unmatched_scores.enabled = true;
-                }
-              ];
-              custom_format_groups = {
-                add = [
-                  {
-                    trash_id = "ff204bbcecdd487d1cefcefdbf0c278d";
-                    select = [
-                      "839bea857ed2c0a8e084f3cbdbd65ecb"
-                    ];
-                  }
-                  {
-                    trash_id = "a3ac6af01d78e4f21fcb75f601ac96df";
-                    select = [
-                      "b8cd450cbfa689c0259a01d9e29ba3d6"
-                      "cae4ca30163749b891686f95532519bd"
-                      "b6832f586342ef70d9c128d40c07b872"
-                      "cc444569854e9de0b084ab2b8b1532b2"
-                      "ed38b889b31be83fda192888e2286d83"
-                      "0a3f082873eb454bde444150b70253cc"
-                      "e6886871085226c3da1830830146846c"
-                      "90a6f9a284dff5103f6346090e6280c8"
-                      "e204b80c87be9497a8a6eaff48f72905"
-                      "712d74cd88bceb883ee32f773656b1f5"
-                      "bfd8eb01832d646a0a89c4deb46f8564"
-                    ];
-                  }
-                  {
-                    trash_id = "7fc2751eef7e6bdc70b74136e5e35c76";
-                  }
-                ];
-              };
+            radarr_hd_1080p = mkRecyclarrInstance {
+              baseUrl = "http://127.0.0.1:7878";
+              apiKey = "!env_var RADARR_API_KEY";
+              qualityType = "movie";
+              x264TrashId = "2899d84dc9372de3408e6d8cc18e9666";
+              x265TrashId = "9170d55c319f4fe40da8711ba9d8050d";
+              av1TrashId = "cae4ca30163749b891686f95532519bd";
             };
           };
         };
