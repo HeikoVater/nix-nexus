@@ -26,6 +26,9 @@
       };
       mergetool.keepBackup = false;
     };
+    extraConfig = {
+      fetch.prune = true;
+    };
   };
 
   # ─── Shared Locale ──────────────────────────────────────────────
