@@ -8,7 +8,7 @@
 
 let
   cfg = config.user.tui.opencode;
-  smallModel = "openai/gpt-5.4-mini";
+  smallModel = "openai/gpt-5.6-luna";
 
   # OpenCode leaks tmux pane startup queries when passthrough is enabled, so
   # run it with pane-local passthrough disabled and restore the prior state.
@@ -85,12 +85,12 @@ in
 
         agent = {
           plan = {
-            model = "openai/gpt-5.4";
-            variant = "xhigh";
+            model = "openai/gpt-5.6-sol";
+            variant = "max";
           };
           build = {
-            model = "openai/gpt-5.4";
-            variant = "xhigh";
+            model = "openai/gpt-5.4-sol";
+            variant = "max";
           };
         };
 
@@ -223,7 +223,7 @@ in
             "git gc*" = "deny";
             "git prune*" = "deny";
           };
-          skill = "ask";
+          skill = "allow";
           webfetch = "allow";
           doom_loop = "ask";
           external_directory = {

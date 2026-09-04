@@ -42,7 +42,7 @@
   programs.steam.enable = true;
 
   services.comfyui = {
-    enable = true;
+    enable = false;
     enableManager = true;
     extraDependencies = [
       "triton"

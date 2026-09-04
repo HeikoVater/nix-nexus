@@ -89,6 +89,7 @@ in
     steam
     libreoffice
     qbittorrent
+    discord
   ];
 
   # ─── MIME Defaults ──────────────────────────────────────────────
