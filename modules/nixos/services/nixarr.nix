@@ -3,6 +3,7 @@
   lib,
   inputs,
   pkgs,
+  utils,
   ...
 }:
 
@@ -17,6 +18,16 @@ let
   bazarrHost = "bazarr.${config.homelab.domain}";
   jellyfinHost = "jellyfin.${config.homelab.domain}";
   seerrHost = "seerr.${config.homelab.domain}";
+
+  mediaMountUnit = "${utils.escapeSystemdPath (toString cfg.mediaDir)}.mount";
+  mediaServices = [
+    "bazarr"
+    "jellyfin"
+    "lidarr"
+    "radarr"
+    "sonarr"
+    "transmission"
+  ];
 
   mkLocalProxyVhost = port: {
     extraConfig = ''
@@ -181,9 +192,21 @@ in
       "d '${toString cfg.stateDir}' 0755 root root - -"
     ];
 
-    # Keep the Arr API endpoints authenticated for remote clients while still
-    # allowing local settings-sync jobs to talk to them over localhost.
-    systemd.services.jellyfin.serviceConfig.UMask = lib.mkForce "0007";
+    # Never let media consumers run against the underlying mountpoint
+    # directory if the media dataset is unavailable or gets unmounted.
+    systemd.services = lib.genAttrs mediaServices (
+      service:
+      {
+        unitConfig = {
+          RequiresMountsFor = [ (toString cfg.mediaDir) ];
+          BindsTo = [ mediaMountUnit ];
+          After = [ mediaMountUnit ];
+        };
+      }
+      // lib.optionalAttrs (service == "jellyfin") {
+        serviceConfig.UMask = lib.mkForce "0007";
+      }
+    );
 
     services = {
       sonarr.settings.auth.required = "DisabledForLocalAddresses";

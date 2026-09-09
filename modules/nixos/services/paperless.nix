@@ -2,6 +2,7 @@
   config,
   lib,
   pkgs,
+  utils,
   ...
 }:
 
@@ -38,6 +39,8 @@ in
       serviceCfg = config.services.paperless;
       serviceGroup = config.users.users.${serviceCfg.user}.group;
       setupService = "paperless-storage-setup.service";
+      storageRoot = toString cfg.storageRoot;
+      storageMountUnit = "${utils.escapeSystemdPath storageRoot}.mount";
       dependentUnits = [
         "paperless-scheduler.service"
         "paperless-task-queue.service"
@@ -82,8 +85,13 @@ in
           map (name: {
             inherit name;
             value = {
+              bindsTo = [ storageMountUnit ];
               requires = [ setupService ];
-              after = [ setupService ];
+              after = [
+                storageMountUnit
+                setupService
+              ];
+              unitConfig.RequiresMountsFor = [ storageRoot ];
             };
           }) dependentServices
         )

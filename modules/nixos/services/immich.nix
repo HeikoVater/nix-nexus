@@ -2,6 +2,7 @@
   config,
   lib,
   pkgs,
+  utils,
   ...
 }:
 
@@ -11,6 +12,7 @@ let
   immichHost = "immich.${config.homelab.domain}";
   immichPort = 2283;
   mediaLocation = toString cfg.mediaLocation;
+  mediaMountUnit = "${utils.escapeSystemdPath mediaLocation}.mount";
   setupService = "immich-storage-setup.service";
   installBin = lib.getExe' pkgs.coreutils "install";
   chownBin = lib.getExe' pkgs.coreutils "chown";
@@ -419,8 +421,13 @@ in
       # Activation can remount ZFS-backed paths after tmpfiles runs, so make
       # Immich fix its writable media root only after the live mount exists.
       systemd.services.immich-server = {
+        bindsTo = [ mediaMountUnit ];
         requires = [ setupService ];
-        after = [ setupService ];
+        after = [
+          mediaMountUnit
+          setupService
+        ];
+        unitConfig.RequiresMountsFor = [ mediaLocation ];
       };
 
       systemd.services.immich-storage-setup = {

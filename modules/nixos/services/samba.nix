@@ -2,12 +2,14 @@
   config,
   lib,
   pkgs,
+  utils,
   ...
 }:
 
 let
   cfg = config.homelab.samba;
   sharePath = toString cfg.sharePath;
+  shareMountUnit = "${utils.escapeSystemdPath sharePath}.mount";
   shareSetupService = "samba-share-setup.service";
   shareGroup = config.users.users.${cfg.user}.group;
   secretName = "samba_password_${cfg.user}";
@@ -82,8 +84,13 @@ in
     networking.firewall.allowedTCPPorts = [ 445 ];
 
     systemd.services.samba-smbd = {
+      bindsTo = [ shareMountUnit ];
       requires = [ shareSetupService ];
-      after = [ shareSetupService ];
+      after = [
+        shareMountUnit
+        shareSetupService
+      ];
+      unitConfig.RequiresMountsFor = [ sharePath ];
     };
 
     systemd.services.samba-share-setup = {

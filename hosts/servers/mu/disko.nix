@@ -22,7 +22,22 @@
 #  └──────────────────────┘  └──────────────────────┘
 #
 # ─────────────────────────────────────────────────────────────────
+let
+  afterZfsMount = [
+    "x-systemd.after=zfs-mount.service"
+    "x-systemd.requires=zfs-mount.service"
+  ];
+in
 {
+  # The pool root uses its native ZFS mountpoint. Order every legacy child
+  # after zfs-mount so none can be hidden by a later /tank mount.
+  fileSystems."/tank/backups".options = afterZfsMount;
+  fileSystems."/tank/media".options = afterZfsMount;
+  fileSystems."/tank/safe".options = afterZfsMount;
+  fileSystems."/tank/safe/immich".options = afterZfsMount;
+  fileSystems."/tank/safe/paperless".options = afterZfsMount;
+  fileSystems."/tank/share".options = afterZfsMount;
+
   disko.devices = {
     disk = {
       # ── NVMe SSD ──────────────────────────────────────────────
@@ -192,6 +207,7 @@
           ashift = "12";
         };
         rootFsOptions = {
+          mountpoint = "/tank";
           compression = "zstd";
           atime = "off";
           xattr = "sa";
