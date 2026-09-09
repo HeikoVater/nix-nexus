@@ -89,8 +89,9 @@ in
     steam
     libreoffice
     qbittorrent
-    discord
   ];
+
+  programs.vesktop.enable = true;
 
   # ─── MIME Defaults ──────────────────────────────────────────────
   xdg.mimeApps = {
