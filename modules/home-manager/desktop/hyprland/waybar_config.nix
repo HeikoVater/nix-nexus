@@ -103,8 +103,8 @@ let
           weekResetText="$(${lib.getExe' pkgs.coreutils "date"} --date="@$weekReset" '+%a %Y-%m-%d %H:%M')" || unavailable
 
           ${lib.getExe pkgs.jq} -cn \
-            --arg text "OpenAI 5h $fiveRemaining% | W $weekRemaining%" \
-            --arg tooltip "5-hour limit resets: $fiveResetText\nWeekly limit resets: $weekResetText" \
+            --arg text "OpenAI: 5h $fiveRemaining% | W $weekRemaining%" \
+            --arg tooltip "5-hour limit resets: $fiveResetText"$'\n'"Weekly limit resets: $weekResetText" \
             '{text: $text, tooltip: $tooltip}'
         '';
       }
