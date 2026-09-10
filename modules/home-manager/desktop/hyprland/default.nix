@@ -11,6 +11,18 @@ in
 {
   options.user.desktop.hyprland = {
     enable = lib.mkEnableOption "Hyprland desktop";
+
+    excludedOutputs = lib.mkOption {
+      type = lib.types.listOf lib.types.str;
+      default = [ ];
+      description = "Outputs excluded from desktop UI such as Waybar and wallpapers.";
+    };
+
+    ignoredWorkspaces = lib.mkOption {
+      type = lib.types.listOf lib.types.str;
+      default = [ ];
+      description = "Workspaces hidden from desktop UI such as Waybar.";
+    };
   };
 
   imports = [

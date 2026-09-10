@@ -25,8 +25,6 @@
         prompt = false;
       };
       mergetool.keepBackup = false;
-    };
-    extraConfig = {
       fetch.prune = true;
     };
   };

@@ -8,6 +8,19 @@
 let
   cfg = config.user.gui.pegasus;
 
+  formatSettingValue =
+    value: if builtins.isBool value then lib.boolToString value else toString value;
+
+  pegasusSettings =
+    cfg.settings
+    // lib.optionalAttrs (cfg.theme != null) {
+      "general.theme" = cfg.theme.name;
+    };
+
+  settingsContent = lib.concatStringsSep "\n" (
+    lib.mapAttrsToList (name: value: "${name}: ${formatSettingValue value}") pegasusSettings
+  );
+
   mkCollectionMeta =
     col:
     lib.concatStringsSep "\n" (
@@ -41,7 +54,20 @@ in
         }
       );
       default = null;
-      description = "Pegasus theme to install and activate. When set, settings.txt is Nix-managed.";
+      description = "Pegasus theme to install and activate.";
+    };
+
+    settings = lib.mkOption {
+      type = lib.types.attrsOf (
+        lib.types.oneOf [
+          lib.types.bool
+          lib.types.int
+          lib.types.float
+          lib.types.str
+        ]
+      );
+      default = { };
+      description = "Pegasus settings written to settings.txt.";
     };
 
     gameDirectories = lib.mkOption {
@@ -97,7 +123,9 @@ in
       { }
       // lib.optionalAttrs (cfg.theme != null) {
         ".config/pegasus-frontend/themes/${cfg.theme.name}".source = cfg.theme.src;
-        ".config/pegasus-frontend/settings.txt".text = "general.theme: ${cfg.theme.name}\n";
+      }
+      // lib.optionalAttrs (pegasusSettings != { }) {
+        ".config/pegasus-frontend/settings.txt".text = settingsContent + "\n";
       }
       // lib.optionalAttrs (cfg.gameDirectories != [ ]) {
         ".config/pegasus-frontend/game_dirs.txt".text =

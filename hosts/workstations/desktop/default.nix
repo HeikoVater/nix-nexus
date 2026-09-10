@@ -26,6 +26,11 @@
         enable = true;
         secretsFile = ../../../secrets/users/heikov.yaml;
       };
+
+      wayland.windowManager.hyprland.settings.monitor = [
+        "DP-1,1920x1080@60,0x0,1"
+        "DP-2,1920x1080@60,1920x0,1"
+      ];
     };
 
   # ═══════════════════════════════════════════════════════════════════
@@ -33,14 +38,22 @@
   # ═══════════════════════════════════════════════════════════════════
   workstation = {
     mount-nas.enable = true;
-    # sunshine.enable = true;
+    sunshine = {
+      enable = true;
+      display = {
+        connector = "HDMI-A-1";
+        sunshineId = 0;
+        refreshRate = 59.982;
+        position = "10000x10000";
+        workspace = "99";
+        notificationOutput = "DP-1";
+      };
+    };
   };
 
   # ═══════════════════════════════════════════════════════════════════
   #  Desktop Services
   # ═══════════════════════════════════════════════════════════════════
-  programs.steam.enable = true;
-
   services.comfyui = {
     enable = false;
     enableManager = true;
