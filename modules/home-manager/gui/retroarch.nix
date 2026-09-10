@@ -46,6 +46,7 @@ in
         snes9x.enable = true;
       };
       settings = {
+        input_menu_toggle_gamepad_combo = "3";
         menu_show_core_updater = "false";
         rgui_config_directory = retroarchConfigDir;
         playlist_directory = retroarchPlaylistsDir;

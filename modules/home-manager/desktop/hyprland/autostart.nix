@@ -7,6 +7,38 @@
 
 let
   cfg = config.user.desktop.hyprland.autostart;
+  excludedOutputs = lib.escapeShellArg (builtins.toJSON config.user.desktop.hyprland.excludedOutputs);
+
+  wallpaperSetup = pkgs.writeShellScript "swww-setup" ''
+    for _ in {1..50}; do
+      if ${pkgs.swww}/bin/swww query >/dev/null 2>&1; then
+        break
+      fi
+      ${lib.getExe' pkgs.coreutils "sleep"} 0.1
+    done
+
+    MONITORS_JSON="$(
+      ${pkgs.hyprland}/bin/hyprctl monitors -j \
+        | ${pkgs.jq}/bin/jq \
+          --argjson excluded ${excludedOutputs} \
+          '[.[] | select(.name as $name | ($excluded | index($name)) == null)]'
+    )"
+    MONITORS_COUNT="$(printf '%s' "$MONITORS_JSON" | ${pkgs.jq}/bin/jq 'length')"
+    SORTED_MONITORS="$(printf '%s' "$MONITORS_JSON" | ${pkgs.jq}/bin/jq -r 'sort_by(.x) | .[].name')"
+    WP="${config.home.homeDirectory}/wallpapers/wp.gif"
+    WP_L="${config.home.homeDirectory}/wallpapers/wp_l.gif"
+    WP_R="${config.home.homeDirectory}/wallpapers/wp_r.gif"
+    if [ "$MONITORS_COUNT" -eq 2 ] && [ -f "$WP_L" ] && [ -f "$WP_R" ]; then
+      LEFT_MONITOR="$(printf '%s\n' "$SORTED_MONITORS" | ${lib.getExe' pkgs.coreutils "head"} -n 1)"
+      RIGHT_MONITOR="$(printf '%s\n' "$SORTED_MONITORS" | ${lib.getExe' pkgs.coreutils "tail"} -n 1)"
+      ${pkgs.swww}/bin/swww img "$WP_L" --outputs "$LEFT_MONITOR" 2>/dev/null || true
+      ${pkgs.swww}/bin/swww img "$WP_R" --outputs "$RIGHT_MONITOR" 2>/dev/null || true
+    else
+      printf '%s\n' "$SORTED_MONITORS" | while read -r MONITOR; do
+        ${pkgs.swww}/bin/swww img "$WP" --outputs "$MONITOR" 2>/dev/null || true
+      done
+    fi
+  '';
 in
 {
   options.user.desktop.hyprland.autostart = {
@@ -21,42 +53,9 @@ in
       };
       Service = {
         Type = "simple";
-        ExecStart = "${pkgs.swww}/bin/swww-daemon";
+        ExecStart = "${pkgs.swww}/bin/swww-daemon --no-cache";
+        ExecStartPost = wallpaperSetup;
         Restart = "on-failure";
-      };
-      Install = {
-        WantedBy = [ "hyprland-session.target" ];
-      };
-    };
-
-    systemd.user.services.swww-wallpaper = {
-      Unit = {
-        Description = "Set wallpaper via swww";
-        Requires = [ "swww-daemon.service" ];
-        After = [ "swww-daemon.service" ];
-        PartOf = [ "hyprland-session.target" ];
-      };
-
-      Service = {
-        Type = "oneshot";
-        ExecStart = pkgs.writeShellScript "swww-setup" ''
-          MONITORS_JSON="$(${pkgs.hyprland}/bin/hyprctl monitors -j)"
-          MONITORS_COUNT="$(echo "$MONITORS_JSON" | ${pkgs.jq}/bin/jq 'length')"
-          SORTED_MONITORS="$(echo "$MONITORS_JSON" | ${pkgs.jq}/bin/jq -r 'sort_by(.x) | .[].name')"
-          WP="${config.home.homeDirectory}/wallpapers/wp.gif"
-          WP_L="${config.home.homeDirectory}/wallpapers/wp_l.gif"
-          WP_R="${config.home.homeDirectory}/wallpapers/wp_r.gif"
-          if [ "$MONITORS_COUNT" -eq 2 ] && [ -f "$WP_L" ]; then
-          LEFT_MONITOR="$(echo "$SORTED_MONITORS" | head -n 1)"
-          RIGHT_MONITOR="$(echo "$SORTED_MONITORS" | tail -n 1)"
-          ${pkgs.swww}/bin/swww img "$WP_L" --outputs "$LEFT_MONITOR" 2>/dev/null || true
-          ${pkgs.swww}/bin/swww img "$WP_R" --outputs "$RIGHT_MONITOR" 2>/dev/null || true
-          else
-          echo "$SORTED_MONITORS" | while read -r MONITOR; do
-          ${pkgs.swww}/bin/swww img "$WP" --outputs "$MONITOR" 2>/dev/null || true
-          done
-          fi
-        '';
       };
       Install = {
         WantedBy = [ "hyprland-session.target" ];

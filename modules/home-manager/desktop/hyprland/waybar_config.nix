@@ -8,6 +8,10 @@
 let
   cfg = config.user.desktop.hyprland.waybar;
   cryptoTrackerEnabled = cfg.cryptoTrackerApiKeyFile != null;
+  outputs = map (output: "!${output}") config.user.desktop.hyprland.excludedOutputs ++ [ "*" ];
+  ignoredWorkspaces = map (
+    workspace: "^${lib.escapeRegex workspace}$"
+  ) config.user.desktop.hyprland.ignoredWorkspaces;
 
   nvidiaStats = pkgs.writeShellScript "nvidia-stats" ''
     if ! command -v nvidia-smi >/dev/null 2>&1; then
@@ -59,6 +63,7 @@ in
   config = lib.mkIf cfg.enable {
     home.file.".config/waybar/config.jsonc".text = ''
       {
+          "output": ${builtins.toJSON outputs},
           "modules-left": ["hyprland/workspaces", "hyprland/submap"],
           "modules-center": ${if cryptoTrackerEnabled then ''["group/finance"],'' else "[] ,"}
           "modules-right": ["group/hardware", "group/laptop", "group/system"],
@@ -67,6 +72,7 @@ in
           "hyprland/workspaces": {
               "format": "{icon} <sub>{windows}</sub>",
               "format-window-separator": "",
+              "ignore-workspaces": ${builtins.toJSON ignoredWorkspaces},
               "window-rewrite-default": "",
               "window-rewrite": {
                   "title<.*youtube.*>": "",
