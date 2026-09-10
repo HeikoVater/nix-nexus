@@ -68,7 +68,10 @@ in
         })
 
         (lib.mkIf display {
-          crypto_tracker_api_key = { };
+          crypto_tracker_api_key = {
+            group = "users";
+            mode = "0440";
+          };
         })
 
         (lib.mkIf config.homelab.nixarr.enable {

@@ -37,12 +37,15 @@ in
     desktop = {
       hyprland = {
         enable = true;
-        waybar.cryptoTrackerApiKeyFile = lib.attrByPath [
-          "sops"
-          "secrets"
-          "crypto_tracker_api_key"
-          "path"
-        ] null osConfig;
+        waybar = {
+          cryptoTrackerApiKeyFile = lib.attrByPath [
+            "sops"
+            "secrets"
+            "crypto_tracker_api_key"
+            "path"
+          ] null osConfig;
+          openaiAuthFile = "${config.xdg.dataHome}/opencode/auth.json";
+        };
       };
     };
   };
