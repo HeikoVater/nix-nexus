@@ -12,6 +12,10 @@ let
   ignoredWorkspaces = map (
     workspace: "^${lib.escapeRegex workspace}$"
   ) config.user.desktop.hyprland.ignoredWorkspaces;
+  openaiUsageEnabled = cfg.openaiAuthFile != null;
+  centerModules =
+    lib.optional cryptoTrackerEnabled "group/finance"
+    ++ lib.optional openaiUsageEnabled "custom/openai-usage";
 
   nvidiaStats = pkgs.writeShellScript "nvidia-stats" ''
     if ! command -v nvidia-smi >/dev/null 2>&1; then
@@ -47,6 +51,65 @@ let
       ''
     else
       null;
+
+  openaiUsageStats =
+    if openaiUsageEnabled then
+      pkgs.writeShellApplication {
+        name = "openai-usage-stats";
+        runtimeInputs = with pkgs; [
+          coreutils
+          curl
+          jq
+        ];
+        text = ''
+          authFile=${lib.escapeShellArg cfg.openaiAuthFile}
+
+          unavailable() {
+            ${lib.getExe pkgs.jq} -cn '{text: "OpenAI N/A", tooltip: "OpenAI usage unavailable"}'
+            exit 0
+          }
+
+          [ -r "$authFile" ] || unavailable
+
+          accessToken="$(${lib.getExe pkgs.jq} -er '.openai | select(.type == "oauth") | .access' "$authFile" 2>/dev/null)" || unavailable
+          accountId="$(${lib.getExe pkgs.jq} -er '.openai.accountId' "$authFile" 2>/dev/null)" || unavailable
+
+          response="$(printf '%s\n' \
+            "header = \"Authorization: Bearer $accessToken\"" \
+            "header = \"ChatGPT-Account-Id: $accountId\"" \
+            'header = "Accept: application/json"' \
+            | ${lib.getExe pkgs.curl} \
+              --config - \
+              --fail \
+              --silent \
+              --max-time 10 \
+              https://chatgpt.com/backend-api/wham/usage 2>/dev/null)" || unavailable
+
+          windows="$(${lib.getExe pkgs.jq} -er '
+            def window($seconds; $fallback):
+              ([.rate_limit.primary_window, .rate_limit.secondary_window]
+                | map(select(.limit_window_seconds == $seconds))[0]) // $fallback;
+            def remaining:
+              (100 - .used_percent) | if . < 0 then 0 elif . > 100 then 100 else . end | round;
+            (window(18000; .rate_limit.primary_window)) as $five |
+            (window(604800; .rate_limit.secondary_window)) as $week |
+            [($five | remaining), $five.reset_at, ($week | remaining), $week.reset_at] | @tsv
+          ' <<<"$response" 2>/dev/null)" || unavailable
+
+          IFS=$'\t' read -r fiveRemaining fiveReset weekRemaining weekReset <<<"$windows"
+          [[ "$fiveReset" =~ ^[0-9]+$ && "$weekReset" =~ ^[0-9]+$ ]] || unavailable
+
+          fiveResetText="$(${lib.getExe' pkgs.coreutils "date"} --date="@$fiveReset" '+%a %Y-%m-%d %H:%M')" || unavailable
+          weekResetText="$(${lib.getExe' pkgs.coreutils "date"} --date="@$weekReset" '+%a %Y-%m-%d %H:%M')" || unavailable
+
+          ${lib.getExe pkgs.jq} -cn \
+            --arg text "OpenAI 5h $fiveRemaining% | W $weekRemaining%" \
+            --arg tooltip "5-hour limit resets: $fiveResetText\nWeekly limit resets: $weekResetText" \
+            '{text: $text, tooltip: $tooltip}'
+        '';
+      }
+    else
+      null;
 in
 {
   options.user.desktop.hyprland.waybar = {
@@ -58,6 +121,13 @@ in
       example = "/run/secrets/crypto_tracker_api_key";
       description = "Path to the crypto-tracker API key file. When unset, the crypto widget is omitted.";
     };
+
+    openaiAuthFile = lib.mkOption {
+      type = lib.types.nullOr lib.types.str;
+      default = null;
+      example = "/home/user/.local/share/opencode/auth.json";
+      description = "Path to OpenCode's OAuth auth file. When unset, the OpenAI usage widget is omitted.";
+    };
   };
 
   config = lib.mkIf cfg.enable {
@@ -65,7 +135,7 @@ in
       {
           "output": ${builtins.toJSON outputs},
           "modules-left": ["hyprland/workspaces", "hyprland/submap"],
-          "modules-center": ${if cryptoTrackerEnabled then ''["group/finance"],'' else "[] ,"}
+          "modules-center": ${builtins.toJSON centerModules},
           "modules-right": ["group/hardware", "group/laptop", "group/system"],
 
           // Modules configuration
@@ -99,6 +169,13 @@ in
             "exec": "${cryptoTrackerStats}",
             "return-type": "json",
             "restart-interval": 600
+        },
+      ''}
+      ${lib.optionalString openaiUsageEnabled ''
+        "custom/openai-usage": {
+            "exec": "${lib.getExe openaiUsageStats}",
+            "return-type": "json",
+            "interval": 60
         },
       ''}
           "group/hardware": {
@@ -286,6 +363,8 @@ in
       #workspaces {
           margin-left: 0;
       }
+      #custom-crypto,
+      #custom-openai-usage,
       #custom-gpu,
       #cpu,
       #memory,
@@ -309,6 +388,10 @@ in
       }
 
       #custom-crypto:hover {
+          box-shadow: inset 0 -3px #ffffff;
+      }
+
+      #custom-openai-usage:hover {
           box-shadow: inset 0 -3px #ffffff;
       }
 
