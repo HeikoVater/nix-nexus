@@ -7,6 +7,7 @@
 let
   mountNas = config.workstation.mount-nas.enable;
   display = config.workstation.display.enable;
+  z2m = config.homelab.zigbee2mqtt;
   immichNsfw = config.homelab.immich.nsfw;
   immichNsfwSecretNames = lib.unique (
     [
@@ -36,6 +37,13 @@ in
           mqtt_password_zigbee2mqtt = {
             owner = "zigbee2mqtt";
             restartUnits = lib.optional config.homelab.zigbee2mqtt.enable "zigbee2mqtt.service";
+          };
+        })
+
+        (lib.mkIf (z2m.enable && z2m.networkKeySecret != null) {
+          ${z2m.networkKeySecret} = {
+            owner = "zigbee2mqtt";
+            restartUnits = [ "zigbee2mqtt.service" ];
           };
         })
 

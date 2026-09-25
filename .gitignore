@@ -10,3 +10,6 @@ result-*
 
 # Ignore hidden in-repo git worktrees
 .worktrees/
+
+# Ignore local migration and inspection artifacts
+/tmp/

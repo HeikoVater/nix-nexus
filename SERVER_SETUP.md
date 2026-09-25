@@ -438,18 +438,21 @@ actually query Pi-hole.
 
 ### Home Assistant
 
-1. Open `https://hass.<hostname>.lan` (accept the self-signed cert)
-2. Complete the onboarding wizard
-3. Add MQTT: Settings > Devices & Services > Add Integration > MQTT
-   Broker: `localhost`, Port: `1883`
-   Username: `homeassistant`
-   Password: the `mqtt_password_homeassistant` value from secrets
+1. Place the mutable configuration in `/var/lib/hass/configuration.yaml`
+2. Start `home-assistant.service`
+3. Open `https://hass.<hostname>.lan` (accept the self-signed cert)
+4. Complete the onboarding wizard
+5. When Mosquitto is enabled, the service bootstrap creates and maintains the
+   MQTT integration entry with broker `127.0.0.1`, port `1883`, username
+   `homeassistant`, and the `mqtt_password_homeassistant` sops secret.
 
 ### Zigbee2MQTT
 
-1. Open `https://z2m.<hostname>.lan`
-2. The Sonoff adapter should appear at `/dev/zigbee`
-3. Click "Permit Join" to pair devices (auto-discover in Home Assistant via MQTT)
+1. Place the mutable configuration and state in `/var/lib/zigbee2mqtt`
+2. Configure the coordinator path in `configuration.yaml`
+3. Start `zigbee2mqtt.service`
+4. Open `https://z2m.<hostname>.lan`
+5. Click "Permit Join" to pair devices (auto-discover in Home Assistant via MQTT)
 
 ### Pi-hole
 
@@ -540,7 +543,7 @@ nix eval .#nixosConfigurations.<hostname>.config.system.build.toplevel --apply '
 | Secrets not decrypting | Age key missing, mismatched, or mounted too late | Verify `/persist/var/lib/sops-nix/key.txt` exists, `sops.age.keyFile` points there, and its public key matches `.sops.yaml`; re-encrypt with `sops updatekeys` if needed |
 | ZFS pool won't import | hostId mismatch (step 9 skipped) | Boot from USB, set the hostId, destroy and recreate pools with disko |
 | No network after boot | NIC name doesn't match `en*` | Check `ip link`; update `matchConfig.Name` in `hosts/servers/<hostname>/default.nix` |
-| Zigbee adapter not found | USB stick missing or udev mismatch | Check `ls -l /dev/zigbee` and `lsusb` for CP2102N (`10c4:ea60`) |
+| Zigbee adapter not found | USB stick missing or serial path changed | Check `/dev/serial/by-id`, `/dev/ttyUSB*`, and `/dev/ttyACM*`; update the runtime Zigbee2MQTT configuration |
 | Fan sensors missing | nct6775 chip ID mismatch | Run `sensors-detect`, update `force_id` in `hardware-configuration.nix` |
 | State lost after reboot | Path not in impermanence | Add it to `modules/nixos/host/impermanence.nix` or the host's `default.nix` |
 | Can't log in after reboot | `<username>_password_hash` missing, or the age key was unavailable before user creation | Add the password hash per steps 6-7 and check the journal for `cannot read keyfile` / `password file ... does not exist` |

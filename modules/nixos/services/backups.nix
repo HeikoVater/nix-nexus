@@ -9,6 +9,7 @@ let
   cfg = config.homelab.backups;
   ha = config.homelab.home-assistant;
   z2m = config.homelab.zigbee2mqtt;
+  mqtt = config.homelab.mosquitto;
   pihole = config.homelab.pihole;
   coolercontrol = config.homelab.coolercontrol;
   nixarr = config.homelab.nixarr;
@@ -20,6 +21,7 @@ let
   gzip = lib.getExe pkgs.gzip;
   install = lib.getExe' pkgs.coreutils "install";
   rm = lib.getExe' pkgs.coreutils "rm";
+  touch = lib.getExe' pkgs.coreutils "touch";
   runuser = lib.getExe' pkgs.util-linux "runuser";
   pgDump = lib.getExe' postgresPackage "pg_dump";
   pgDumpAll = lib.getExe' postgresPackage "pg_dumpall";
@@ -32,20 +34,30 @@ let
     ++ (lib.optional config.nixarr.bazarr.enable "bazarr.service")
     ++ (lib.optional config.nixarr.jellyfin.enable "jellyfin.service")
     ++ (lib.optional config.nixarr.seerr.enable "seerr.service");
-  nixarrStopCommands = lib.concatMapStrings (unit: "systemctl stop ${unit}\n") nixarrServiceUnits;
-  nixarrStartCommands = lib.concatMapStrings (
-    unit: "systemctl start ${unit} || true\n"
-  ) nixarrServiceUnits;
-  immichNsfwStopCommands = lib.optionalString immich.nsfw.enable (
-    "systemctl stop immich-nsfw-scan.service\n"
-    + lib.optionalString immich.nsfw.review.enable "systemctl stop immich-nsfw-review.service\n"
-  );
-  immichNsfwStartCommands = lib.optionalString (immich.nsfw.enable && immich.nsfw.review.enable) (
-    "systemctl start immich-nsfw-review.service || true\n"
-  );
+  backupServiceStateDir = "/run/borgbackup-${config.networking.hostName}-active-services";
+  backupServiceUnits =
+    (lib.optional ha.enable "home-assistant.service")
+    ++ (lib.optional z2m.enable "zigbee2mqtt.service")
+    ++ (lib.optional mqtt.enable "mosquitto.service")
+    ++ (lib.optional pihole.enable "pihole-ftl.service")
+    ++ nixarrServiceUnits
+    ++ (lib.optional immich.nsfw.enable "immich-nsfw-scan.service")
+    ++ (lib.optional (immich.nsfw.enable && immich.nsfw.review.enable) "immich-nsfw-review.service");
+  stopActiveServices = lib.concatMapStrings (unit: ''
+    if systemctl is-active --quiet ${lib.escapeShellArg unit}; then
+      ${touch} ${lib.escapeShellArg "${backupServiceStateDir}/${unit}"}
+      systemctl stop ${lib.escapeShellArg unit}
+    fi
+  '') backupServiceUnits;
+  startPreviouslyActiveServices = lib.concatMapStrings (unit: ''
+    if [ -e ${lib.escapeShellArg "${backupServiceStateDir}/${unit}"} ]; then
+      systemctl start ${lib.escapeShellArg unit} || true
+    fi
+  '') (lib.reverseList backupServiceUnits);
   backupPaths =
     (lib.optional ha.enable "/var/lib/hass")
     ++ (lib.optional z2m.enable "/var/lib/zigbee2mqtt")
+    ++ (lib.optional mqtt.enable "/var/lib/mosquitto")
     ++ (lib.optional pihole.enable "/etc/pihole")
     ++ (lib.optional pihole.enable "/var/lib/pihole")
     ++ (lib.optional coolercontrol.enable "/etc/coolercontrol")
@@ -97,7 +109,7 @@ in
       repo = cfg.repo;
       doInit = true;
       archiveBaseName = config.networking.hostName;
-      readWritePaths = lib.optional needsPostgresDump postgresDumpDir;
+      readWritePaths = [ backupServiceStateDir ] ++ lib.optional needsPostgresDump postgresDumpDir;
 
       encryption = {
         mode = "repokey";
@@ -121,40 +133,40 @@ in
       # Stop services during backup for data consistency.
       # Home Assistant's SQLite database and Nixarr app state can
       # be inconsistent if copied while their services are writing.
-      preHook =
-        (lib.optionalString ha.enable "systemctl stop home-assistant.service\n")
-        + (lib.optionalString z2m.enable "systemctl stop zigbee2mqtt.service\n")
-        + (lib.optionalString pihole.enable "systemctl stop pihole-ftl.service\n")
-        + (lib.optionalString nixarr.enable nixarrStopCommands)
-        + immichNsfwStopCommands
-        + (lib.optionalString needsPostgresDump ''
-          ${install} -d -m 0700 ${lib.escapeShellArg postgresDumpDir}
-          shopt -s nullglob dotglob
-          dumpEntries=(${lib.escapeShellArg postgresDumpDir}/*)
-          if [ ''${#dumpEntries[@]} -gt 0 ]; then
-            ${rm} -rf "''${dumpEntries[@]}"
-          fi
-          ${runuser} -u postgres -- ${pgDumpAll} --globals-only | ${gzip} -9 > ${lib.escapeShellArg "${postgresDumpDir}/globals.sql.gz"}
-        '')
-        + (lib.optionalString paperless.enable ''
-          ${runuser} -u postgres -- ${pgDump} --clean --if-exists --create --dbname=paperless | ${gzip} -9 > ${lib.escapeShellArg "${postgresDumpDir}/paperless.sql.gz"}
-        '')
-        + (lib.optionalString immich.enable ''
-          ${runuser} -u postgres -- ${pgDump} --clean --if-exists --create --dbname=${lib.escapeShellArg config.services.immich.database.name} | ${gzip} -9 > ${lib.escapeShellArg "${postgresDumpDir}/immich.sql.gz"}
-        '');
+      preHook = ''
+        ${install} -d -m 0700 ${lib.escapeShellArg backupServiceStateDir}
+        ${rm} -f ${lib.escapeShellArg backupServiceStateDir}/*
+        ${stopActiveServices}
+      ''
+      + (lib.optionalString needsPostgresDump ''
+        ${install} -d -m 0700 ${lib.escapeShellArg postgresDumpDir}
+        shopt -s nullglob dotglob
+        dumpEntries=(${lib.escapeShellArg postgresDumpDir}/*)
+        if [ ''${#dumpEntries[@]} -gt 0 ]; then
+          ${rm} -rf "''${dumpEntries[@]}"
+        fi
+        ${runuser} -u postgres -- ${pgDumpAll} --globals-only | ${gzip} -9 > ${lib.escapeShellArg "${postgresDumpDir}/globals.sql.gz"}
+      '')
+      + (lib.optionalString paperless.enable ''
+        ${runuser} -u postgres -- ${pgDump} --clean --if-exists --create --dbname=paperless | ${gzip} -9 > ${lib.escapeShellArg "${postgresDumpDir}/paperless.sql.gz"}
+      '')
+      + (lib.optionalString immich.enable ''
+        ${runuser} -u postgres -- ${pgDump} --clean --if-exists --create --dbname=${lib.escapeShellArg config.services.immich.database.name} | ${gzip} -9 > ${lib.escapeShellArg "${postgresDumpDir}/immich.sql.gz"}
+      '');
 
       # Use || true so a failure to start one service does not
       # prevent the other from being attempted.
-      postHook =
-        (lib.optionalString pihole.enable "systemctl start pihole-ftl.service || true\n")
-        + (lib.optionalString z2m.enable "systemctl start zigbee2mqtt.service || true\n")
-        + (lib.optionalString nixarr.enable nixarrStartCommands)
-        + (lib.optionalString ha.enable "systemctl start home-assistant.service || true\n")
-        + immichNsfwStartCommands;
+      postHook = ''
+        ${startPreviouslyActiveServices}
+        ${rm} -f ${lib.escapeShellArg backupServiceStateDir}/*
+      '';
 
       persistentTimer = true;
     };
 
-    systemd.tmpfiles.rules = lib.optional needsPostgresDump "d ${postgresDumpDir} 0700 root root -";
+    systemd.tmpfiles.rules = [
+      "d ${backupServiceStateDir} 0700 root root -"
+    ]
+    ++ lib.optional needsPostgresDump "d ${postgresDumpDir} 0700 root root -";
   };
 }

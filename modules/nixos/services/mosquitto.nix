@@ -36,6 +36,11 @@ in
       ];
     };
 
+    systemd.services.mosquitto.serviceConfig = {
+      StateDirectory = "mosquitto";
+      StateDirectoryMode = "0700";
+    };
+
     # Port 1883 is intentionally NOT opened in the firewall.
     # Only services on this host need to reach the broker.
     # If you need external MQTT access, add 1883 to allowedTCPPorts.

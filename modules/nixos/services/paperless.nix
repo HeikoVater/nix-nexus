@@ -27,10 +27,27 @@ in
       description = "Directory that stores Paperless application state.";
     };
 
+    ocrLanguage = lib.mkOption {
+      type = lib.types.str;
+      default = "eng";
+      example = "deu+eng";
+      description = "Tesseract language or language combination used for OCR.";
+    };
+
     consumptionDirIsPublic = lib.mkOption {
       type = lib.types.bool;
       default = false;
       description = "Whether the Paperless consumption inbox should be world-writable.";
+    };
+
+    sambaShare = {
+      enable = lib.mkEnableOption "an authenticated Samba share for the Paperless consumption inbox";
+
+      name = lib.mkOption {
+        type = lib.types.str;
+        default = "paperless-consume";
+        description = "Name of the Samba share that exposes the Paperless consumption inbox.";
+      };
     };
   };
 
@@ -58,6 +75,17 @@ in
       chmodBin = lib.getExe' pkgs.coreutils "chmod";
     in
     {
+      assertions = [
+        {
+          assertion = !cfg.sambaShare.enable || config.homelab.samba.enable;
+          message = "homelab.paperless.sambaShare.enable requires homelab.samba.enable.";
+        }
+        {
+          assertion = !cfg.sambaShare.enable || !cfg.consumptionDirIsPublic;
+          message = "The Paperless consumption inbox must not be public when its Samba share is enabled.";
+        }
+      ];
+
       services.paperless = {
         enable = true;
         address = "127.0.0.1";
@@ -73,6 +101,7 @@ in
             "HTTP_X_FORWARDED_PROTO"
             "https"
           ];
+          PAPERLESS_OCR_LANGUAGE = cfg.ocrLanguage;
           PAPERLESS_TRUSTED_PROXIES = "127.0.0.1";
           PAPERLESS_URL = "https://${paperlessHost}";
           PAPERLESS_USE_X_FORWARD_HOST = true;
@@ -134,7 +163,25 @@ in
               ''}
             '';
           };
+        }
+        // lib.optionalAttrs cfg.sambaShare.enable {
+          samba-smbd = {
+            requires = [ setupService ];
+            after = [ setupService ];
+          };
         };
+
+      services.samba.settings.${cfg.sambaShare.name} = lib.mkIf cfg.sambaShare.enable {
+        path = serviceCfg.consumptionDir;
+        browseable = "yes";
+        "read only" = "no";
+        "guest ok" = "no";
+        "valid users" = config.homelab.samba.user;
+        "force user" = serviceCfg.user;
+        "force group" = serviceGroup;
+        "create mask" = "0660";
+        "directory mask" = "0770";
+      };
 
       services.caddy.virtualHosts."${paperlessHost}" = {
         extraConfig = ''

@@ -59,12 +59,13 @@ in
       transmissionPeerPort = 15570;
     };
 
-    home-assistant.enable = false;
-    mosquitto.enable = false;
-    zigbee2mqtt.enable = false;
+    home-assistant.enable = true;
+    mosquitto.enable = true;
+    zigbee2mqtt.enable = true;
     paperless = {
       enable = true;
-      consumptionDirIsPublic = true;
+      ocrLanguage = "deu+eng";
+      sambaShare.enable = true;
     };
     immich = {
       enable = true;

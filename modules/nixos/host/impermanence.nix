@@ -40,9 +40,30 @@ let
   ]
   # ─── Service State (conditional) ──────────────────────────
   # Only persist directories for services that are enabled.
-  ++ (lib.optional ha.enable "/var/lib/hass")
-  ++ (lib.optional z2m.enable "/var/lib/zigbee2mqtt")
-  ++ (lib.optional mqtt.enable "/var/lib/mosquitto")
+  ++ (lib.optionals ha.enable [
+    {
+      directory = "/var/lib/hass";
+      user = "hass";
+      group = "hass";
+      mode = "0700";
+    }
+  ])
+  ++ (lib.optionals z2m.enable [
+    {
+      directory = "/var/lib/zigbee2mqtt";
+      user = "zigbee2mqtt";
+      group = "zigbee2mqtt";
+      mode = "0700";
+    }
+  ])
+  ++ (lib.optionals mqtt.enable [
+    {
+      directory = "/var/lib/mosquitto";
+      user = "mosquitto";
+      group = "mosquitto";
+      mode = "0700";
+    }
+  ])
   ++ (lib.optional cc.enable "/etc/coolercontrol")
   ++ (lib.optional nixarr.enable (toString nixarr.stateDir))
   ++ (lib.optional samba.enable "/var/lib/samba")
