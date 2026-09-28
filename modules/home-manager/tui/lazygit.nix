@@ -7,12 +7,43 @@
 
 let
   cfg = config.user.tui.lazygit;
-  opencodeEnabled = config.user.tui.opencode.enable;
-  commitSubjectCommand = lib.escapeShellArgs [
-    "${pkgs.runtimeShell}"
-    "-lc"
-    "opencode run --command commit-subject --format json 2>/dev/null | ${pkgs.jq}/bin/jq -Rr 'fromjson? | select(.type == \"text\" and .part.metadata.openai.phase == \"final_answer\") | .part.text'"
-  ];
+  codingAgent = config.user.tui.codingAgent;
+  claudeCommitSubjectPrompt = ''
+    The staged diff and its summary are provided on standard input.
+
+    Write exactly one Git commit subject line for the staged changes.
+    Do not output anything else.
+
+    Requirements:
+    - Use imperative mood.
+    - Focus on the intent of the change, not a file-by-file summary.
+    - Do not end with a period.
+    - Prefer 50-60 characters and never exceed 72 characters.
+    - Use a prefix like fix:, feat:, refactor:, docs:, test:, or chore: only when it clearly fits.
+  '';
+  commitSubjectCommand = pkgs.writeShellApplication {
+    name = "coding-agent-commit-subject";
+    text =
+      if codingAgent == "opencode" then
+        ''
+          ${config.programs.opencode.package}/bin/opencode run --command commit-subject --format json 2>/dev/null \
+            | ${pkgs.jq}/bin/jq -Rr 'fromjson? | select(.type == "text" and .part.metadata.openai.phase == "final_answer") | .part.text'
+        ''
+      else
+        ''
+          {
+            printf 'Staged diff stat:\n'
+            ${pkgs.git}/bin/git diff --cached --stat
+            printf '\nStaged diff:\n'
+            ${pkgs.git}/bin/git diff --cached
+          } | ${config.programs.claude-code.finalPackage}/bin/claude \
+            --print \
+            --output-format text \
+            --tools "" \
+            --no-session-persistence \
+            ${lib.escapeShellArg claudeCommitSubjectPrompt} 2>/dev/null
+        '';
+  };
 in
 {
   options.user.tui.lazygit = {
@@ -53,8 +84,7 @@ in
         ];
 
         update.method = "never";
-      }
-      // lib.optionalAttrs opencodeEnabled {
+
         customCommands = [
           {
             key = "C";
@@ -68,7 +98,7 @@ in
                 type = "input";
                 title = "Commit subject";
                 key = "Message";
-                initialValue = "{{ runCommand `${commitSubjectCommand}` }}";
+                initialValue = "{{ runCommand `${lib.getExe commitSubjectCommand}` }}";
               }
             ];
           }

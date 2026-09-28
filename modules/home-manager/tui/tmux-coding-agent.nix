@@ -1,7 +1,7 @@
-{ pkgs }:
+{ agentCommand, pkgs }:
 
 pkgs.writeShellApplication {
-  name = "tmux-opencode";
+  name = "tmux-coding-agent";
   runtimeInputs = with pkgs; [
     git
     tmux
@@ -12,18 +12,19 @@ pkgs.writeShellApplication {
     mode="''${1:-}"
     cwd="''${2:-$PWD}"
     target_window="''${3:-$(tmux display-message -p '#{window_id}')}"
+    agent_command=${pkgs.lib.escapeShellArg agentCommand}
     root=$(git -C "$cwd" rev-parse --show-toplevel 2>/dev/null || printf '%s\n' "$cwd")
 
     tmux set-option -w -q -t "$target_window" @worktree_root "$root"
 
     case "$mode" in
         popup)
-            tmux display-popup -E -w 90% -h 90% -d "$root" opencode
+            tmux display-popup -E -w 90% -h 90% -d "$root" "$agent_command"
             ;;
         sidebar)
             panes=$(tmux list-panes -t "$target_window" -F '#{pane_id}\t#{pane_title}' \
                 | while IFS="$(printf '\t')" read -r pane_id pane_title; do
-                    if [ "$pane_title" = "opencode-sidebar" ]; then
+                    if [ "$pane_title" = "coding-agent-sidebar" ]; then
                         printf '%s\n' "$pane_id"
                     fi
                 done)
@@ -34,12 +35,12 @@ pkgs.writeShellApplication {
                 done
             else
                 tmux select-window -t "$target_window"
-                new_pane=$(tmux split-window -h -p 35 -t "$target_window" -c "$root" -P -F '#{pane_id}' opencode)
-                tmux select-pane -t "$new_pane" -T opencode-sidebar
+                new_pane=$(tmux split-window -h -p 35 -t "$target_window" -c "$root" -P -F '#{pane_id}' "$agent_command")
+                tmux select-pane -t "$new_pane" -T coding-agent-sidebar
             fi
             ;;
         *)
-            printf 'Usage: tmux-opencode <popup|sidebar> [cwd] [target-window]\n' >&2
+            printf 'Usage: tmux-coding-agent <popup|sidebar> [cwd] [target-window]\n' >&2
             exit 1
             ;;
     esac

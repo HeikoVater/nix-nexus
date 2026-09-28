@@ -22,9 +22,12 @@
     {
       imports = [ ../../../home/heikov/workstation.nix ];
 
-      user.cli.sops-menu = {
-        enable = true;
-        secretsFile = ../../../secrets/users/heikov.yaml;
+      user = {
+        cli.sops-menu = {
+          enable = true;
+          secretsFile = ../../../secrets/users/heikov.yaml;
+        };
+        tui.codingAgent = "opencode";
       };
 
       wayland.windowManager.hyprland.settings.monitor = [

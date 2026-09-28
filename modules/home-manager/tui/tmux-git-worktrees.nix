@@ -1,4 +1,4 @@
-{ pkgs, tmuxOpencode }:
+{ pkgs, tmuxCodingAgent }:
 
 pkgs.writeShellApplication {
   name = "tmux-git-worktrees";
@@ -23,7 +23,7 @@ pkgs.writeShellApplication {
     tmux set-option -w -q -t "$current_window" @worktree_root "$repo_root"
 
     repo_name=$(basename "$repo_root")
-    tmux_opencode_bin="${tmuxOpencode}/bin/tmux-opencode"
+    tmux_coding_agent_bin="${tmuxCodingAgent}/bin/tmux-coding-agent"
 
     auto_allow_direnv() {
         local target_path="$1"
@@ -49,7 +49,7 @@ pkgs.writeShellApplication {
         tmux set-option -w -q -t "$new_window" @worktree_root "$target_path"
 
         if [ "$target_path" != "$repo_root" ]; then
-            "$tmux_opencode_bin" sidebar "$target_path" "$new_window"
+            "$tmux_coding_agent_bin" sidebar "$target_path" "$new_window"
         fi
     }
 

@@ -7,9 +7,18 @@
 
 let
   cfg = config.user.tui.tmux;
-  tmuxOpencode = import ./tmux-opencode.nix { inherit pkgs; };
+  codingAgent = config.user.tui.codingAgent;
+  codingAgentCommand =
+    if codingAgent == "opencode" then
+      "${config.programs.opencode.package}/bin/opencode"
+    else
+      "${config.programs.claude-code.finalPackage}/bin/claude";
+  tmuxCodingAgent = import ./tmux-coding-agent.nix {
+    inherit pkgs;
+    agentCommand = codingAgentCommand;
+  };
   tmuxGitWorktrees = import ./tmux-git-worktrees.nix {
-    inherit pkgs tmuxOpencode;
+    inherit pkgs tmuxCodingAgent;
   };
 in
 {
@@ -203,11 +212,11 @@ in
           # sops-menu popup
           bind -n ${mainMod}-s run-shell -b 'pane_id=$(tmux display-message -p "#{pane_id}"); pane_path=$(tmux display-message -p "#{pane_current_path}"); tmux display-popup -d "$pane_path" -w 80% -h 80% -E "sops-menu --mode tmux --tmux-pane $pane_id"'
 
-          # opencode popup
-          bind -n ${mainMod}-o run-shell -b '${tmuxOpencode}/bin/tmux-opencode popup "#{pane_current_path}"'
+          # Coding agent popup
+          bind -n ${mainMod}-o run-shell -b '${tmuxCodingAgent}/bin/tmux-coding-agent popup "#{pane_current_path}"'
 
-          # opencode sidebar
-          bind -n ${mainMod}-O run-shell -b '${tmuxOpencode}/bin/tmux-opencode sidebar "#{pane_current_path}"'
+          # Coding agent sidebar
+          bind -n ${mainMod}-O run-shell -b '${tmuxCodingAgent}/bin/tmux-coding-agent sidebar "#{pane_current_path}"'
 
           # ─── Copy Mode (OSC 52 clipboard via set-clipboard) ────────
 

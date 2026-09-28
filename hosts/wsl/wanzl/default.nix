@@ -12,7 +12,13 @@
   # ═══════════════════════════════════════════════════════════════════
   #  Home Manager — heikov user
   # ═══════════════════════════════════════════════════════════════════
-  home-manager.users.heikov = import ../../../home/heikov/headless.nix;
+  home-manager.users.heikov =
+    { ... }:
+    {
+      imports = [ ../../../home/heikov/headless.nix ];
+
+      user.tui.codingAgent = "claude-code";
+    };
 
   # ═══════════════════════════════════════════════════════════════════
   #  WSL Platform

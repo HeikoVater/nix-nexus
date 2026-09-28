@@ -38,7 +38,10 @@
       };
       pkgs-unstable = import nixpkgs-unstable {
         inherit system;
-        config.allowUnfree = false;
+        config = {
+          allowUnfree = false;
+          allowUnfreePredicate = pkg: nixpkgs.lib.getName pkg == "claude-code";
+        };
       };
     in
     {

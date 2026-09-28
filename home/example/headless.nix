@@ -32,7 +32,6 @@
       tmux.enable = true;
       lazygit.enable = true;
       nvf.enable = true;
-      opencode.enable = true;
       yazi.enable = true;
     };
   };

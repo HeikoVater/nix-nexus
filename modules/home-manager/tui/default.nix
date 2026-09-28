@@ -1,5 +1,7 @@
 {
   imports = [
+    ./claude-code.nix
+    ./coding-agent.nix
     ./lazygit.nix
     ./packages.nix
     ./tmux.nix

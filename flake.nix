@@ -76,7 +76,10 @@
       pkgs = mkPkgs false;
       pkgs-unstable = import nixpkgs-unstable {
         inherit system;
-        config.allowUnfree = false;
+        config = {
+          allowUnfree = false;
+          allowUnfreePredicate = pkg: lib.getName pkg == "claude-code";
+        };
       };
 
       homeManagerExtraSpecialArgs = {
